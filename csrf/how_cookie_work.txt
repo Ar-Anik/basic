@@ -1,0 +1,75 @@
+# step by step to understand how a browser handles cookies from the first request to subsequent requests :
+
+# Step 1: First Request (No Cookie Yet)
+-> When you visit https://mybank.com for the first time, your browser doesn’t have any cookies for this site yet.
+The request looks like this:
+    GET /dashboard HTTP/1.1
+    Host: mybank.com
+
+* Since this is your first visit, the browser does not send any cookies.
+* The server needs a way to identify you and track your session.
+
+# Step 2: Server Sends a Cookie in Response
+-> The server sees that no session exists for this user, so it creates a new session and tells the browser to store a cookie.
+The server responds like this:
+    HTTP/1.1 200 OK
+    Set-Cookie: sessionid=abc123; Path=/; Secure; HttpOnly
+
+* Set-Cookie tells the browser: "Store this cookie for future requests."
+* sessionid=abc123 is a unique identifier for your session.
+* Path=/ means the cookie applies to all pages on mybank.com.
+* Secure means this cookie is only sent over HTTPS.
+* HttpOnly means JavaScript cannot access this cookie (extra security).
+
+Q: What Happens in the Browser?
+    1. The browser receives the Set-Cookie response header.
+    2. It stores the cookie in its internal cookie storage.
+    3. Now, the browser will automatically send this cookie with all future requests to mybank.com.
+
+
+# Step 3: Second Request (Browser Sends Cookie Automatically)
+-> Now, when you click another page on mybank.com, the browser automatically includes the cookie in the request:
+    GET /account HTTP/1.1
+    Host: mybank.com
+    Cookie: sessionid=abc123
+
+* The server sees sessionid=abc123, looks it up in the database, and knows who you are.
+* You remain logged in without needing to log in again.
+
+Q: Where Does the Browser Store Cookies?
+-> The browser stores cookies in a local cookie storage system, which can be viewed in Developer Tools:
+
+# How to View Cookies:
+    1. Open Developer Tools (F12 or Ctrl + Shift + I in Chrome).
+    2. Go to the Application tab.
+    3. Click on Cookies under Storage.
+    4. Select the website (mybank.com).
+    5. You'll see a list of stored cookies, including:
+        * Name (sessionid)
+        * Value (abc123)
+        * Expiration date
+        * Path, Secure, HttpOnly flags.
+
+# Step 4: When Do Cookies Expire?
+-> Cookies can expire in two ways:
+
+1. Session Cookies (Temporary)
+-> If the server doesn't set an expiration time, the cookie lasts only until you close the browser.
+Example:
+    Set-Cookie: sessionid=abc123; Path=/; Secure; HttpOnly
+
+* When you close the browser, this cookie disappears.
+
+2. Persistent Cookies (Stored for a Longer Time)
+-> If the server sets an expiration date, the cookie remains even after closing the browser.
+Example:
+    Set-Cookie: sessionid=abc123; Path=/; Secure; HttpOnly; Expires=Fri, 12 Apr 2025 12:00:00 GMT
+
+* The cookie is saved until April 12, 2025, unless deleted manually.
+
+# Step 5: When Does a New Cookie Get Issued?
+-> A server can issue a new cookie in different cases:
+    1. If the old session expired, a new session is created.
+    2. If the user logs out, the old cookie is deleted, and a new one is created when they log in again.
+    3. If security policies change (e.g., a new SameSite policy is added).
+

@@ -1,0 +1,57 @@
+-> The Cache-Control header is an HTTP header used to specify directives for caching mechanisms in both requests and responses.
+
+# Below breakdown of commonly used Cache-Control directives, with descriptions:
+
+1. public : Indicates that the response can be cached by any cache (browser, proxy, CDN, etc.), even if it would normally be non-cacheable.
+
+2. private : The response is intended for a single user and should not be cached by shared caches (like a proxy or CDN). Browser can cache it.
+
+3. no-cache : Forces caches to submit the request to the origin server for validation before releasing a cached copy. Doesn’t mean “don’t cache”!
+
+4. no-store : Prevents caching altogether. Neither browser nor any intermediary should store a copy of the response. Used for sensitive data.
+
+5. max-age=<seconds> : Specifies the maximum amount of time (in seconds) a resource is considered fresh. After this, it is considered stale.
+
+6. s-maxage=<seconds> :	Similar to max-age, but specific to shared caches (e.g., CDN). Overrides max-age for those.
+
+7. must-revalidate : The cache must verify the status of the stale resource with the origin server before using it.
+
+8. proxy-revalidate : Similar to must-revalidate, but applies to shared caches (proxies) only.
+
+9. immutable : Tells the browser that the resource won’t change during its lifetime (as specified by max-age). No revalidation needed.
+
+10. no-transform : Caches or proxies should not modify the resource. Example: don't optimize/compress images.
+
+# Example :
+1. Static Asset Caching (e.g., images, JS, CSS) :
+    Cache-Control: public, max-age=31536000, immutable
+→ Cache for 1 year and don't revalidate; content won't change.
+
+2. Sensitive Data (e.g., Banking page)
+    Cache-Control: no-store
+→ Never cache this data, even in browser memory.
+
+3. API Response with Expiry
+    Cache-Control: private, max-age=60, must-revalidate
+→ Cache for 60 seconds but revalidate after expiry; only store in browser.
+
+
+# Example in Django :
+
+→ Method 1: Using @cache_control decorator
+
+from django.views.decorators.cache import cache_control
+from django.http import HttpResponse
+
+@cache_control(public=True, max_age=3600, immutable=True)
+def static_asset_view(request):
+    return HttpResponse("This is a static resource")
+
+→ Method 2: Manually setting headers
+
+from django.http import HttpResponse
+
+def private_data_view(request):
+    response = HttpResponse("This is sensitive data")
+    response['Cache-Control'] = 'no-store'
+    return response

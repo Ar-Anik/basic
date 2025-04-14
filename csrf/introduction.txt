@@ -1,0 +1,6 @@
+Q : What is CSRF?
+--> CSRF stands for Cross-Site Request Forgery. It is a security attack that tricks a user into performing an unwanted action on a website where
+    they are already logged in.
+
+# Think of it like this: Imagine you're logged into your bank account in one browser tab, and in another tab, you open a malicious website. That bad
+website secretly sends a request to your bank to transfer money—without your permission—but since you're logged in, the bank accepts it.
