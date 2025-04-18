@@ -1,0 +1,61 @@
+1. Same-Site vs Cross-Site Requests
+-> Same-Site Request : Request comes from the same domain (e.g., you click a link inside mybank.com that goes to another page
+    in mybank.com)
+-> Cross-Site Request : Request comes from another site (e.g., you’re on badsite.com but it sends a request to mybank.com)
+
+# Same-site Example:
+-> You are on https://mybank.com, and you click a link to transfer money. That request is considered same-site. Cookies for
+mybank.com are automatically included by your browser. The server sees the cookie and knows you are logged in.
+
+# Cross-site Example:
+-> You are on https://badsite.com, which secretly sends a POST request to https://mybank.com/transfer-money. This is a
+cross-site request. Your browser still includes the mybank.com cookies because:
+    * The request is going to mybank.com (even though it originated from another site)
+    * That's how browsers normally behave for cross-origin requests unless specifically restricted.
+
+
+2. How Cookies Work in Browsers ?
+-> A cookie is a small piece of text stored in your browser. It is automatically sent with every request to the domain that
+set it.
+
+# Let’s say mybank.com sets a cookie:
+    Set-Cookie: sessionid=abc123; Path=/; Secure; HttpOnly
+
+Then, whenever your browser sends a request to mybank.com, it automatically includes:
+    Cookie: sessionid=abc123
+
+Cookies help the server remember who you are—this is how you're "logged in" even when you refresh the page or click around.
+
+3. How the Server Identifies a Request is Safe
+-> When a request comes in, the server checks:
+    1. Does it come with a valid session cookie (like sessionid=abc123)?
+    2. Does that session ID match a logged-in user in the database?
+    3. Optional: Does it include a valid CSRF token if it's a sensitive action?
+
+If all checks pass, the server allows the action. So, just having a cookie is enough to tell the server,
+    "This request is from Alice who is logged in."
+
+4. Can a Malicious Site Steal Cookies?
+-> Usually, NO. And here’s why:
+Reason	                Protection
+Different Origin	    JavaScript on badsite.com cannot access cookies from mybank.com
+HttpOnly	            If a cookie is marked HttpOnly, JavaScript cannot read it at all
+CORS Restrictions	    Cross-Origin requests are limited by browser security
+
+# So how does the attacker send a request?
+-> Even though the attacker can’t steal the cookie, they don’t need to. Here’s the trick:
+    The attacker just makes the browser send the request (e.g., via a hidden form), and the browser automatically
+    includes the cookies for mybank.com.
+
+That’s why CSRF is dangerous — even if the attacker can’t see the cookie, they can make the browser send it.
+
+5. How to Stop CSRF?
+-> Use CSRF Tokens (server-generated, unique per session)
+    1. Attacker can’t guess them
+    2. Browser can’t auto-include them
+    3. So a cross-site request fails validation
+
+-> Use SameSite cookies
+    1. Modern browsers support the SameSite attribute: Set-Cookie: sessionid=abc123; SameSite=Strict
+    2. This tells the browser: "Only send this cookie in same-site requests."
+    3. Cross-site forms from badsite.com won’t include the cookie.

@@ -1,0 +1,79 @@
+Q: How Csrf token work?
+
+1. Middleware Setup – Enabling CSRF Protection
+-> Django uses CsrfViewMiddleware to activate CSRF protection. This middleware must be enabled in MIDDLEWARE in settings.py:
+    MIDDLEWARE = [
+        ...
+        'django.middleware.csrf.CsrfViewMiddleware',
+        ...
+    ]
+
+2. CSRF Cookie is Set
+-> When a user first makes a request (usually via a GET request), Django sets a CSRF cookie.
+    * This cookie contains a randomly generated secret value.
+    * The cookie is set when django.middleware.csrf.get_token(request) is called internally or explicitly.
+# Example :
+from django.middleware.csrf import get_token
+def my_view(request):
+    token = get_token(request)  # sets CSRF cookie if not already present
+
+3. {% csrf_token %} Tag is Rendered in Template
+-> In your template, you add the CSRF token inside a form like this:
+    <form method="post">
+        {% csrf_token %}
+        <!-- form fields here -->
+    </form>
+
+When the template engine renders {% csrf_token %}, it inserts a hidden input field:
+    <input type="hidden" name="csrfmiddlewaretoken" value="random_token_value">
+This token is a masked version of the CSRF secret. The mask changes every time get_token() is called,
+so the token looks different each time but is still valid.
+
+4. User Submits Form (POST Request)
+-> When the form is submitted, two things are sent to the server:
+    * The CSRF cookie (stored in the browser).
+    * The csrfmiddlewaretoken field (as part of form data).
+
+5. Django Validates the Token
+-> CsrfViewMiddleware now does these checks:
+    * Ensures method is unsafe (POST, PUT, DELETE, etc.).
+    * Checks for CSRF cookie in the request.
+    * Reads and unmasks the submitted token (csrfmiddlewaretoken).
+    * Compares the unmasked token’s secret with the CSRF cookie value.
+
+✅ If they match → request is allowed.
+❌ If not → request is rejected with 403 Forbidden.
+
+6. Optional: Rotate Token After Login
+-> Django rotates the CSRF secret on login for security. This means:
+    If you submit a form after login using a stale page (from before login), the token will be invalid.
+The solution: reload the form after login.
+
+# CSRF in AJAX Requests
+-> For AJAX (JavaScript) POST requests, you must manually add the CSRF token in headers:
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+const csrftoken = getCookie("csrftoken");
+
+fetch("/your-url/", {
+    method: "POST",
+    headers: {
+        "X-CSRFToken": csrftoken,
+        "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ key: "value" })
+});
+

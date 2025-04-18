@@ -1,0 +1,55 @@
+--> Django only generates and sets a new CSRF token when:
+1. There is no existing CSRF cookie, OR
+2. You’ve just logged in (CSRF secret is rotated), OR
+3. You explicitly force it (e.g., @ensure_csrf_cookie), OR
+    * This decorator forces Django to always send a CSRF cookie even if the page doesn't use {% csrf_token %}.
+    * Useful for AJAX or SPA setups.
+4. The view/template calls get_token(request) (which {% csrf_token %} does internally)
+-> {% csrf_token %} does:
+        get_token(request)
+And inside get_token(request) If a valid CSRF secret is already present in:
+    * the request object (from the existing csrftoken cookie), OR
+    * the session (if CSRF_USE_SESSIONS = True)
+➤ Then it simply returns the masked version of that existing secret.
+➤ No new secret is generated.
+➤ No new cookie is set.
+
+
+Q : What is SameSite Policy?
+-> SameSite is a browser-level cookie protection. It controls when cookies are sent in cross-site requests.
+
+# There are three possible SameSite values:
+Setting	        Behavior
+Lax (default)	Allows cookies only on same-site navigation and top-level GETs
+Strict	        Cookies only sent when navigating from the same origin
+None	        Cookies sent on all cross-site requests — but must also be Secure
+
+The CSRF cookie behavior is controlled by:
+    CSRF_COOKIE_SAMESITE = 'Lax'  # default
+We can set:
+    CSRF_COOKIE_SAMESITE = 'Strict'
+    CSRF_COOKIE_SAMESITE = 'None'  # must also set CSRF_COOKIE_SECURE = True
+
+This affects how browsers handle cookies in cross-site contexts, and is part of CSRF mitigation too (because stolen cookies are less likely to be reused across origins).
+
+3. How does Django detect a cross-site request?
+-> Django uses a combination of the following headers to detect cross-origin requests:
+
+a. Origin Header (Modern Browsers)
+-> When browsers make a POST/PUT/DELETE request to your site, they often include:
+    Origin: https://example.com
+Django checks that this Origin header matches your host or is in CSRF_TRUSTED_ORIGINS. If it doesn't match — Django blocks the request.
+
+b. Referer Header (Fallback for HTTPS)
+-> If Origin is missing, Django falls back to checking Referer.
+    This is stricter — Django checks:
+        * That the Referer is present
+        * That it starts with the exact host of your site (https://example.com/)
+        * That the protocol matches (HTTPS)
+
+Referer: https://example.com/form/
+# If it's from another domain — CSRF fails.
+
+Q: What if both headers are missing?
+  -> For HTTPS requests, Django requires at least one to validate origin.
+  -> For HTTP, it doesn't rely on Referer/Origin (not reliable over insecure protocols) — instead, it purely checks the token and cookie.

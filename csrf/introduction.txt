@@ -4,3 +4,22 @@ Q : What is CSRF?
 
 # Think of it like this: Imagine you're logged into your bank account in one browser tab, and in another tab, you open a malicious website. That bad
 website secretly sends a request to your bank to transfer money—without your permission—but since you're logged in, the bank accepts it.
+
+# How does CSRF work?
+1. You log into your bank
+-> Your bank sets a session cookie to keep you logged in. Now, any request you send to the bank will automatically include that session cookie.
+
+2. You visit a malicious website
+-> This website has a hidden form like:
+    <form action="https://yourbank.com/transfer" method="POST">
+        <input type="hidden" name="amount" value="1000">
+        <input type="hidden" name="to_account" value="attacker_account">
+    </form>
+
+    <script>
+        document.forms[0].submit(); // Submits the form automatically
+    </script>
+
+3. What happens?
+-> Since you're logged into your bank, this malicious form submits with your session cookie, and the bank thinks you made the request.
+Then Money transferred to the attacker's account. This is CSRF in action. You're forged into sending a cross-site request.
