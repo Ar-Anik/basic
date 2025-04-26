@@ -1,0 +1,119 @@
+--> Form validation in Django is a powerful and well-organized process that ensures data submitted through a
+    form is correct and safe to use before processing or saving.
+
+# Steps of Form Validation in Django :
+1. Form is instantiated with data (form = MyForm(request.POST)).
+2. form.is_valid() is called.
+3. form.is_valid() triggers form.full_clean().
+4. full_clean() calls:
+    4.1 self._clean_fields(): Clean individual fields.
+    4.2 self._clean_form(): Call clean() method for cross-field validation.
+    4.3 self._post_clean(): Model-related cleaning (used in ModelForm).
+5. Errors are collected in self._errors.
+
+Validation Maninly Start From form.is_valid() function.
+
+# Step-by-Step Explanation of the Validation Process
+-> STEP 1: Form is Instantiated
+    form = MyForm(request.POST)
+Data is passed to the form but not validated yet.
+
+-> STEP 2: form.is_valid() is Called
+    if form.is_valid():
+This calls the internal method form.full_clean() to validate and clean the data.
+
+-> STEP 3: full_clean() is Called
+This is where everything happens. Here's what it looks like internally:
+
+def full_clean(self):
+    self._errors = {}  # Clear any previous errors
+    if not self.is_bound:
+        return
+
+    self.cleaned_data = {}
+    self._clean_fields()
+    self._clean_form()
+    self._post_clean()
+
+-> STEP 4.1: _clean_fields() – Validate Each Field Individually
+Loop through every declared field in the form and clean them individually.
+
+    value = field.widget.value_from_datadict(data, files, self.add_prefix(name))
+    try:
+        value = field.clean(value)  # This calls to_python(), validate(), run_validators()
+        self.cleaned_data[name] = value
+        clean_method = getattr(self, f'clean_{name}', None)
+        if clean_method:
+            self.cleaned_data[name] = clean_method()
+    except ValidationError as e:
+        self.add_error(name, e)
+
+-> STEP 4.2: clean_<field>() – Custom Per-Field Validation
+If you define a method like this:
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email and not email.endswith('@example.com'):
+            raise ValidationError('Email must be from example.com')
+        return email
+It’s called after field.clean() and can access other cleaned_data. It can modify the value or raise errors.
+
+-> STEP 4.3: _clean_form() – Cross-Field Validation
+This calls my clean() method on the form. That i write in form subclass. Actual implementation of _clean_form() from
+django source coode:
+    def _clean_form(self):
+        try:
+            self.cleaned_data = self.clean()
+        except ValidationError as e:
+            self.add_error(None, e)  # None = non-field error
+Here,
+    * self.clean() → This calls the clean() method defined in my subclassed form (if defined one)
+    * If not overridden, it calls the base Form.clean() method, which just returns self.cleaned_data untouched.
+
+Form.clean() implementation in Django :
+    def clean(self):
+        return self.cleaned_data
+
+Example of clean() method in form sub-class:
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get('start')
+        end = cleaned_data.get('end')
+        if start and end and end < start:
+            raise ValidationError('End must be after start')
+        return cleaned_data
+
+Here,
+    * This is where you validate the relationship between fields.
+    * It's useful for things like comparing dates, passwords, etc.
+
+# STEP 4.4: _post_clean() – ModelForm Specific
+This is only used in ModelForm.
+    * Calls model-level clean_fields() and clean() from the Django model.
+    * Adds model-specific validation errors.
+
+-> STEP 5: Errors or Cleaned Data Ready
+After full_clean() is done:
+    * If there were any ValidationError, they are stored in form.errors.
+    * If not, you can access validated data in form.cleaned_data.
+
+Example of Validation :
+    class ContactForm(forms.Form):
+        name = forms.CharField(max_length=100, required=True)
+        email = forms.EmailField(required=True)
+        age = forms.IntegerField(min_value=18)
+
+        def clean_name(self):
+            name = self.cleaned_data['name']
+            if "badword" in name:
+                raise forms.ValidationError("Inappropriate name")
+            return name
+
+        def clean(self):
+            cleaned_data = super().clean()
+            email = cleaned_data.get('email')
+            age = cleaned_data.get('age')
+
+            if email and age and age < 21 and email.endswith('@company.com'):
+                raise forms.ValidationError("Users under 21 can't use company email")
+            return cleaned_data

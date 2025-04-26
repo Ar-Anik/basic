@@ -1,0 +1,25 @@
+# static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+--> In development (when DEBUG = True): Django does not serve media files automatically by default. So, to make our
+media files (like uploaded images, PDFs, etc.) accessible via URLs during development, we need to add this line:
+    from django.conf import settings
+    from django.conf.urls.static import static
+
+    urlpatterns = [
+        # ... our other URL patterns ...
+    ]
+
+    if settings.DEBUG:
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+-> This means:
+    * Any URL starting with settings.MEDIA_URL (like /media/)
+    * Will serve files from the settings.MEDIA_ROOT directory on our server (like /path/to/project/media/)
+
+# In production (when DEBUG = False):
+    * Django does not serve media files for us.
+    * This line has no effect in production, even if it’s present in urls.py.
+    * Instead, in production, media files should be served by a web server like:
+        1. Nginx
+        2. Apache
+        3. Or through a cloud storage/CDN (e.g., Amazon S3)
+Our web server or cloud storage will map URLs like /media/filename.jpg to the appropriate file storage location.

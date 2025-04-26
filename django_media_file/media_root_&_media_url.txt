@@ -1,0 +1,42 @@
+--> MEDIA_URL and MEDIA_ROOT are used to handle user-uploaded files, such as pictures, documents, or
+    any other media content users might upload through forms or admin.
+
+# MEDIA_ROOT – Where files are stored
+-> Definition: It's the absolute filesystem path to the directory where Django will store uploaded files.
+-> Use case: When a user uploads a file via a form (request.FILES), Django needs to save it somewhere on
+   my disk. That "somewhere" is MEDIA_ROOT.
+
+Example :
+    MEDIA_ROOT = BASE_DIR / 'media'
+So, if someone uploads myphoto.jpg, it’ll be saved in:  /my_project/media/myphoto.jpg
+
+# MEDIA_URL – How to access files in browser
+-> Definition: It's the public URL used to access media files via a browser.
+-> Use case: When we want to display uploaded files in a template (e.g., an image), Django uses MEDIA_URL to
+   generate the proper URL.
+
+Example :
+    MEDIA_URL = '/media/'
+So if a file is at media/myphoto.jpg, the browser URL becomes: http://mydomain.com/media/myphoto.jpg
+
+-> Important Notes:
+    * In production, we typically let Nginx or Apache serve files from MEDIA_ROOT, not Django.
+    * In development, we use static() from django.conf.urls.static to serve files.
+
+Q: If MEDIA_URL = '/this_media/' and MEDIA_ROOT = BASE_DIR / 'media' then application save file in /media/xyz.jpg (if i upload xyz.jpg) then when i need fetch xyz.jpg then media url work perfetly?
+--> YES
+
+-> Physical storage location: MEDIA_ROOT = /my_project/media/
+-> URL access path: MEDIA_URL = /this_media/
+
+-> in urls.py :
+    from django.conf import settings
+    from django.conf.urls.static import static
+
+    urlpatterns = [
+        # your app URLs
+    ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+Django will now serve files like this:
+    * if MEDIA_URL = '/this_media/' and MEDIA_ROOT = /project/media/
+    * then /this_media/xyz.jpg will serve /project/media/xyz.jpg

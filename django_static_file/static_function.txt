@@ -1,0 +1,24 @@
+# static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+-> static function is used only in development, and it's specific to Django projects to help serve static files
+   (like CSS, JS, images, etc.) when you're using the built-in Django development server (python manage.py runserver).
+
+Q : What is static()?
+-> static() is a helper function provided by Django: from django.conf.urls.static import static
+It returns URL pattern(s) that serve static files during development only. These patterns are added to your main urlpatterns list in urls.py.
+
+Q : Why do we need it?
+-> In development:
+1. Django automatically serves static files from app-level `static/` folders and any folders in STATICFILES_DIRS when DEBUG=True.
+we don’t need to configure anything extra for this — it just works with the development server (runserver).
+
+2. However, Django does not automatically serve files from the STATIC_ROOT folder.
+That folder is used after running collectstatic, which collects all static files in one place for production use.
+
+3. If we want to serve files from the STATIC_ROOT folder during development (to simulate production), we must tell Django how to serve them.
+That’s why we use: urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+This tells Django:
+→ "When a request comes to /static/..., serve the file from the STATIC_ROOT directory."
+
+So, from here settings.STATIC_URL, Django understands: when a request comes starting with STATIC_URL, then serve files
+from STATIC_ROOT (only if DEBUG=True).

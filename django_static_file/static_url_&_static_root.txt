@@ -1,0 +1,95 @@
+--> STATIC_URL, STATIC_ROOT and STATICFILES_DIRS are used for managing static files.
+
+--> In the context of URLs, a prefix refers to a specific portion of the address that comes before the main website
+    address. It can include elements like the protocol (http or https), the subdomain (like "www"), or a directory
+    structure.
+
+# STATIC_URL — Used in templates and frontend
+--> This is the URL prefix used to refer to static files in your templates and HTML.
+Example :
+        STATIC_URL = '/static/'
+In template :
+        <link rel="stylesheet" href="{% static 'css/style.css' %}">
+So when rendered it becomes :
+        <link rel="stylesheet" href="/static/css/style.css">
+
+-> It tells Django where the browser should look to get static files. Then Django looks inside every configured static folder (in apps or
+STATICFILES_DIRS) to see if a file exists at that exact path.
+
+Q : if STATIC_URL = 'find/' and  <link rel="stylesheet" href="{% static 'this/css/style.css' %}"> What happens behind the scenes?
+step by step :
+    1. Django sees {% static 'this/css/style.css' %}.
+    2. It resolves this into a final URL like: /find/this/css/style.css
+    3. Django does not care where the HTML file is located.
+    4. When loading static files, Django uses its static file finders to look through:
+        * All static/ folders in installed apps (app/static/)
+        * All folders listed in STATICFILES_DIRS
+So :
+    ✅ Django will search root static folder (from STATICFILES_DIRS)
+    ✅ And all registered app static/ folders
+    ✅ And it will return the first match it finds
+
+
+# STATICFILES_DIRS : STATICFILES_DIRS is a setting in Django settings.py file that tells Django:
+      "Hey, these are extra folders where I keep static files (CSS, JS, images, etc.) outside of the app-specific static/ directories.
+       Please include them when collecting static files."
+
+-> Use STATICFILES_DIRS when you have global/static files not tied to any specific app.
+Project Structure Example:
+    myproject/
+        │
+        ├── static/
+        │   ├── css/
+        │   │   └── global.css
+        │   ├── js/
+        │   │   └── global.js
+        │   └── images/
+        │       └── logo.png
+        │
+        ├── myapp/
+        │   └── static/
+        │       └── myapp/
+        │           └── app.css
+
+-> In Django Settings.py :
+    STATICFILES_DIRS = [
+        os.path.join(BASE_DIR, 'static'),
+    ]
+
+* This tells Django: Also look here when collecting static files or serving them in development.
+
+
+# STATIC_ROOT
+Q : What is an absolute file path?
+-> An absolute path is the full path that starts from the root of file system and leads to a specific file or folder.
+   It tells exactly where a file is located on computer, no matter where are running the program from.
+
+# Example (Linux or Mac):
+    /home/yourusername/myproject/staticfiles/
+
+Q : What do we mean by "disk"?
+-> "Disk" here refers to computer’s storage — usually a hard disk drive (HDD) or solid state drive (SSD).
+
+--> STATIC_ROOT is the absolute file path on disk where Django will collect all static files when you run: python manage.py collectstatic
+
+# Example : STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+-> During deployment, Django collects all static files from every app and places them in a single directory (STATIC_ROOT) that web server
+   (like Nginx) can serve efficiently.
+
+Q : when STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles') then what happens when run python manage.py collectstatic ?
+-> step by step :
+    1. Create a folder called staticfiles/ (if it doesn’t exist already)
+    2. Copy all static files (CSS, JS, images, etc.) from all apps into that one folder and any global static folders listed in STATICFILES_DIRS
+    3. Keep the internal directory structure (e.g., myapp/css/style.css)
+
+Q : Why python manage.py collectstatic is important?
+-> In development, Django serves static files with runserver. But in production, web server (like Nginx) is responsible for serving
+static files. It needs all static assets in one place, so it can serve them fast. That’s what collectstatic does — it gathers everything
+for web server.
+
+# Important Notes: If files with the same path exist in different apps (e.g., both have css/style.css), only the first one found is collected.
+Running collectstatic is safe — it copies files, doesn’t delete them from your app folders.
+
+
+# STATICFILES_FINDERS : https://docs.djangoproject.com/en/5.2/ref/settings/#std-setting-STATICFILES_FINDERS

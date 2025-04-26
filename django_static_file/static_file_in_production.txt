@@ -1,0 +1,45 @@
+--> link : https://docs.djangoproject.com/en/5.2/howto/static-files/deployment/
+
+Q : What Is the "Storage" in Django?
+-> In Django, Storage is a class that knows how and where to save files. There are different kinds of Storage:
+    * Saving files locally (on your own server’s disk)
+    * Saving files to the cloud (like AWS S3, Azure Blob, etc.)
+
+Django’s default Storage saves files locally on the server. But if we want to save static files somewhere else (like AWS S3),
+we have to tell Django:
+    "Hey, use a different Storage for static files!"
+
+we tell Django which Storage to use by setting:
+    STORAGES = {
+        "staticfiles": {
+            "BACKEND": "path.to.CustomStorageClass"
+        }
+    }
+
+Here, staticfiles is a special alias telling Django: "For collecting static files, use this custom Storage backend."
+
+Q : What Happens When Run collectstatic?
+-> When run: python manage.py collectstatic
+Django does the following:
+    * Collects all static files from all apps
+    * Then uses the storage class (from STORAGES['staticfiles']) to save them somewhere.
+
+-> If your storage class saves files locally, then files will appear in the STATIC_ROOT folder on your server.
+-> If your storage class saves files remotely (like AWS S3), Django can automatically upload files to the cloud
+   during collectstatic.
+
+Q : What Is post_process?
+-> post_process is a method that some Storage classes use to do extra work after files are collected, for example:
+    1. Uploading files to S3.
+    2. Compressing CSS/JS files.
+    3. Adding version hashes to filenames to avoid caching issues.
+
+# If our storage class defines a smart post_process(), we don't need to manually upload or move anything after
+collectstatic. If we use a simple local storage, we still need to set up ourr web server to serve static files.
+
+So full process :
+* Storage class tells Django where to put static files.
+* If we're using simple local storage, Django saves them in a local folder, and we have to serve/move them yourself.
+* If we're using smart cloud storage (with post_process), Django might automatically upload static files to cloud
+  storage during collectstatic.
+* post_process = a helper step that can do things automatically like uploading or modifying files after collecting.
