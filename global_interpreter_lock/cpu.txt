@@ -1,0 +1,36 @@
+--> A CPU core is a processing unit within a computer's central processing unit (CPU). Modern CPUs have multiple cores,
+meaning they can perform multiple tasks simultaneously.
+    * A single-core CPU can handle one task (thread) at a time.
+    * A quad-core CPU can handle four tasks in parallel, assuming the software supports it.
+So "more than one CPU core" means your machine is capable of running multiple things at once, in true parallel, not
+just switching between them quickly.
+
+
+Q : What is the relationship between processes and CPU cores?
+    * A process is an independent program in execution.
+    * The Operating System (OS) can schedule each process to run on a separate CPU core.
+    * Multiple processes can run in parallel on different cores.
+-> For example: On a 4-core CPU, if you run 4 separate Python scripts (i.e., processes), the OS can assign each to
+   its own core, achieving true parallelism.
+
+
+Q :  What is the relationship between threads and CPU cores?
+    * A thread is a smaller unit of execution within a process.
+    * Threads in the same process share memory and state.
+    * The OS can schedule threads to run on different cores — but in Python (CPython), there's a big
+      caveat: the Global Interpreter Lock (GIL).
+
+
+Q : The GIL and Multi-Core CPUs
+    * The GIL allows only one thread to execute Python bytecode at a time, even on a multi-core CPU.
+    * So, even if you have 8 threads and 8 CPU cores, only one thread runs at a time for Python code.
+    * This limits true parallelism in multi-threaded Python programs (for CPU-bound tasks).
+
+However:
+    * Python processes are not affected by the GIL.
+    * For CPU-bound tasks that need parallelism, Python developers often use the multiprocessing module, which spawns
+      separate processes (not threads), allowing full use of multiple CPU cores.
+
+
+--> The GIL restricts multi-threaded execution within a single process, but does not restrict multiple processes from
+running in parallel — because each process has its own GIL.

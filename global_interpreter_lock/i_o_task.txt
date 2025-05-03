@@ -1,0 +1,20 @@
+Q : What is an I/O Task?
+-> I/O (Input/Output) tasks involve operations where the program interacts with external systems, such as:
+    * Reading or writing to files (disk I/O)
+    * Making network requests (e.g., HTTP, database queries)
+    * Reading user input from a keyboard, or writing output to a display
+    * Communicating with hardware devices (like USB or serial ports)
+
+-> These tasks are usually slow compared to CPU operations because they depend on external systems (which can
+   take milliseconds or more to respond).
+
+Q : Why Release the GIL During I/O?
+-> When a thread starts an I/O task like reading from a file or waiting for a network response:
+    * Python knows it won’t be using the CPU — it's just waiting for external data.
+    * So Python releases the GIL to let another thread run Python code.
+    * Once the I/O finishes, the thread reacquires the GIL to resume execution.
+
+-> This makes I/O-bound threading useful because:
+    * While one thread waits for a response (e.g., web API),
+    * Another thread can actually do something productive, like start another request or process other data.
+

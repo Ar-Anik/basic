@@ -1,0 +1,197 @@
+--> WSGI stands for Web Server Gateway Interface(an interface refers to a standardized way for web servers (e.g. Gunicorn,
+uWSGI) to communicate with Python web applications). It is a specification that describes how a web server communicates
+with a Python web application. Think of it as a bridge between web servers (like Nginx or Apache) and Python web
+frameworks (like Django or Flask-).
+
+
+Q : What Is a WSGI Application Server?
+-> A WSGI application server is responsible for running Python web applications and handling dynamic requests.
+It follows the WSGI standard, allowing it to communicate with any WSGI-compatible Python framework like Django or Flask.
+
+-> Examples of WSGI Application Servers:
+    * Gunicorn
+    * uWSGI
+    * mod_wsgi (Apache module)
+
+-> How It Works:
+    1. Our browser sends a request.
+    2. The web server (e.g., Nginx) receives it.
+    3. The web server passes the request to Gunicorn or uWSGI, a WSGI server.
+    4. That WSGI server uses the WSGI interface to call our Django application.
+    5. Django processes the request and returns a response through the same WSGI interface.
+    6. The WSGI server sends the response back to Nginx.
+    7. Nginx delivers it to your browser.
+
+-> Example of Running Gunicorn:
+    gunicorn --workers=3 myproject.wsgi:application
+This tells Gunicorn to:
+    1. Use 3 worker processes to handle requests.
+    2. Run the Django app through WSGI.
+
+
+Q : What Is a Web Server?
+--> A web server is responsible for handling HTTP requests and serving static files (CSS, JavaScript, images).
+It can also act as a reverse proxy, forwarding dynamic requests to a WSGI application server.
+
+-> Examples of Web Servers:
+    * Nginx 🚀 (lightweight, fast, widely used)
+    * Apache 🏗️ (older, more feature-rich)
+    * Caddy 🌐 (modern with built-in SSL)
+
+-> What a Web Server Does:
+    * Serves static files (CSS, JS, images).
+    * Handles HTTPS (SSL/TLS encryption).
+    * Acts as a reverse proxy, forwarding dynamic requests to Gunicorn/uWSGI.
+
+-> Example Nginx Configuration for Django + Gunicorn:
+    server {
+        listen 80;
+        server_name example.com;
+
+        location / {
+            proxy_pass http://127.0.0.1:8000;  # Forward requests to Gunicorn
+        }
+
+        location /static/ {
+            root /path/to/staticfiles;  # Serve static files
+        }
+    }
+
+-> Diagram: Nginx + Gunicorn Setup
+Client (Browser)  →  Nginx (Web Server)  →  Gunicorn (WSGI Server)  →  Django (Application)
+
+* Nginx receives the request, serves static files, and forwards dynamic requests to Gunicorn.
+* Gunicorn runs the Django app and processes the request.
+
+
+Q : Why WSGI?
+--> Before WSGI, every Python web framework had its own way of connecting with the server. This caused incompatibility
+issues. So, WSGI was introduced as a standard interface so that:
+    1. Any Python web app can talk to any WSGI-compliant web server.
+    2. Web frameworks (Django, Flask, etc.) don’t need to worry about specific server implementations.
+    3. Web servers (Gunicorn, uWSGI, etc.) don't need to understand different Python frameworks.
+
+
+Q : Why Do We Need WSGI?
+--> We need WSGI because web servers like Nginx or Apache can’t directly run Python code like Django or Flask. WSGI provides
+a standard interface between them. Web Server(Nginx or Apache) don’t know how to execute Python code and process Python-based
+logic (like Django views, ORM, templates, etc.).
+
+# If the Server Connected Directly to the Application :
+-> Problem step by step describe below :
+    1. Web servers don’t know how to execute Python code : Nginx, Apache, etc. are written in C and designed to handle
+       HTTP, not run Python applications or understand Django logic.
+    2. No standardized request/response structure :	A web server sends an HTTP request, but how does our app get it? WSGI
+       defines a common structure (environ, start_response) to make this work.
+    3. No concurrency or process management : Servers like Gunicorn (WSGI servers) can manage multiple worker processes to handle
+       load. Web servers aren’t meant to spawn Python interpreters or manage app lifecycles.
+    4. No error handling or logs : WSGI servers provide robust error logs, debugging, and graceful error handling that a web
+       server alone doesn’t provide.
+    5. Static vs dynamic content confusion : Web servers are great at serving static files (images, JS, CSS), but not dynamic
+       Python logic. We need a WSGI layer to separate responsibilities.
+
+# WSGI = Translation Layer (imagine)
+-> WSGI basically translates HTTP requests from the web server into something, our Django app can understand.
+
+# Let’s say Nginx receives this request:
+    GET /products/1 HTTP/1.1
+    Host: example.com
+    User-Agent: Chrome
+
+Case-1 : Without WSGI, Django has no idea what to do with that raw HTTP request.
+Case-2 : With WSGI, that request is passed into Django like this:
+    def application(environ, start_response):
+        # environ is a dictionary of all the request data
+        # Django knows what to do from here
+
+Q : Isn’t it Django’s job to handle routing, call the view, and access the database? Why should Nginx or Apache need
+to know any of that? Isn’t it enough if the server just hits a URL, and Django does the rest?
+-> Yes, Django does handle the routing, view, and database — but only after something (like Gunicorn) has started
+Django and is capable of speaking to it.
+
+-> The issue is: Nginx doesn’t know how to start, call, or talk to Django.
+
+# Explanation Step by Step :
+1. Browser sends an HTTP request :
+-> Let’s say the browser requests: https://example.com/products/5/
+That hits the Nginx server.
+
+2. Nginx receives the request :
+-> Nginx looks at this request and says:
+    "Okay, this is an HTTP GET request to /products/5/. Do I know what to do with it?"
+Now it checks:
+    * Is it a static file? (CSS, JS, image) — if yes, serve it ✅
+    * Is it dynamic (i.e., Python-based logic)? — if yes, I have no idea what to do ❌
+So Nginx says:
+    "I can’t handle this request myself. I’ll forward it to someone who knows Python."
+
+3. Nginx forwards the request to Gunicorn (a WSGI server) :
+-> This is where Gunicorn comes in. Gunicorn:
+    * Understands the WSGI interface
+    * Can import our Django project (myproject.wsgi:application)
+    * Can call our Django app, pass the HTTP request, and wait for a response.
+Only now Django is actually running — before this, it was just code sitting on disk.
+
+4. Gunicorn calls Django Gunicorn :
+    * Passes the request as a Python dictionary (environ) to Django.
+    * Django routes the URL, finds the matching view.
+    * View executes your logic, queries the DB using ORM, renders a template, and returns an HTTP response.
+
+5. Response goes back :
+    * Django returns the response to Gunicorn.
+    * Gunicorn sends it back to Nginx.
+    * Nginx sends it to the browser.
+
+Special Note : `Nginx knows how to speak HTTP, but not how to speak to a Django app. Gunicorn knows how to speak WSGI,
+which is the only way to communicate with Django or Flask.`
+
+
+Q : How Does Nginx Know Which Request is for Static Files?
+-> Nginx knows based on the URL pattern in the request and how we configure Nginx in our config file (nginx.conf or
+a site config like /etc/nginx/sites-available/our-site).
+
+# Step by Step :
+1. In Django All static files (CSS, JS, fonts, etc.) are collected into one place using:
+    python manage.py collectstatic
+This puts everything (from your app + third-party apps) into a folder like: /var/www/example.com/static/
+
+2. We tell Nginx: “Hey Nginx, if the request URL starts with /static/, don't bother Django. Just look inside
+   that folder and serve the file directly.”
+
+# Nginx Config Example Here’s what that looks like:
+    server {
+        listen 80;
+        server_name example.com;
+
+        # STATIC FILES
+        location /static/ {
+            alias /var/www/example.com/static/;
+        }
+
+        # MEDIA FILES (if any)
+        location /media/ {
+            alias /var/www/example.com/media/;
+        }
+
+        # ALL OTHER REQUESTS → FORWARD TO DJANGO VIA GUNICORN
+        location / {
+            proxy_pass http://127.0.0.1:8000;  # Gunicorn
+            include proxy_params;
+        }
+    }
+
+# What Happens Internally?
+-> Let’s say the browser requests: GET /static/css/style.css
+Nginx matches this line:
+    location /static/ {
+        alias /var/www/example.com/static/;
+    }
+
+Nginx knows: "This is a static file! I'll go find it on disk, no need to talk to Django."
+
+-> Now another request comes in: GET /products/1/
+Nginx looks at all its location rules:
+    * /static/? ❌ No match
+    * /media/? ❌ No match
+    * / (default)? ✅ Yes!
+It forwards the request to Gunicorn, which passes it to Django.

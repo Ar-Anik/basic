@@ -1,0 +1,60 @@
+Q : What is a Thread in Programming?
+--> A thread is the smallest unit of execution in a program. we can think of a program as a house and a thread as a
+person inside doing a task.
+A program can have:
+    1. One thread (single-threaded) → only one person doing one task at a time.
+    2. Multiple threads (multi-threaded) → many persons working on different tasks at the same time.
+
+-> Simple definition: A thread is like a "worker" inside our program that runs instructions (code).
+
+Q : Is Python a Single-threaded Language?
+--> By default, CPython (the most popular Python interpreter) is single-threaded because of something called the
+GIL (Global Interpreter Lock). That meaning: Only one thread can execute Python bytecode at a time.
+
+-> Even if we create multiple threads in Python, because of the GIL, only one thread can run Python code at a
+time — others must wait.
+# Python can do threading, but it’s limited for CPU-heavy tasks because of the GIL.
+
+Threads in Python are still very useful for IO-bound tasks (like downloading files, API calls, etc.).
+
+Q : How does a Thread Work?
+-> The Basic Working :
+    1. A thread has its own program counter (what instruction to execute next).
+    2. It also has its own stack (local variables, function calls).
+    3. Multiple threads share the same memory space (global variables, heap memory).
+
+-> Imagine: All threads live inside the same house (program memory). Each thread has its own table (stack), but the
+same kitchen, bathroom, and living room (shared memory).
+
+-> Life Cycle of a Thread :
+    1. Thread is created but not started yet
+    2. Ready to run but waiting for CPU time
+    3. Actively executing
+    4. Waiting for something (like I/O, or lock)
+    5. Finished execution
+
+-> Multithreading Types (True Parallelism vs Pseudo-Parallelism)
+In Python (CPython), because of the GIL:
+    * Even with multiple threads, only one thread runs Python bytecode at a time.
+    * Switching happens very fast (many times per second) — giving the illusion of parallelism.
+In other languages (like C++, Java), or in Python with multiprocessing, true parallel threads can run on multiple CPU cores.
+
+Q : Which resources threads share?
+--> Threads share:
+    1. Global Variables
+    2. Open files
+    3. Database connections
+    4. Heap Memory (objects in memory)
+
+But each thread has its own:
+    * Function call stack
+    * Local variables
+    * Program counter (which line to execute next)
+
+
+5. Problems in Threading: (Advanced Level)
+* Race Condition : When two threads access and modify the same variable at the same time → Unexpected behavior happens.
+* Deadlock : Two or more threads wait forever for each other to release a resource.
+   Example: Thread A locks resource 1 and waits for resource 2, Thread B locks resource 2 and waits for resource 1.
+* Starvation : A thread never gets CPU time because other threads are always prioritized.
+

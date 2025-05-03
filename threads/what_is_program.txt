@@ -1,0 +1,33 @@
+Q : What is a Program?
+--> Program is a set of instructions (written code) that a computer can execute to perform a task. When you write Python
+code (.py file), that is a program. When you compile or run that code, it becomes an active running program inside your
+computer's memory.
+
+-> When your Python script is running (alive in the computer memory), that running instance is called a program (more
+technically: a process). Inside that running program, you can have one or more threads. Each thread executes parts of
+the code.
+
+# Real-Life Analogy:
+    ✅ Restaurant = Program
+    ✅ Restaurant Open = Program is Running
+    ✅ Waiters = Threads doing work inside the program
+
+* If restaurant is closed, no waiter can work → If the program is not running, no threads can do anything.
+* If you have only one waiter, customers are served one by one → Single-threaded: one task at a time.
+* If you have many waiters, many customers are served at the same time → Multi-threaded: multiple tasks running concurrently.
+
+-> When the restaurant opens, the first waiter (called Main Thread) automatically starts working. we can later hire
+more waiters (create new threads) if needed.
+
+
+Q : What is process?
+--> When run a Python script the operating system (Windows/Linux/Mac) creates a Process. So process is an instance of running program.
+
+# step by step :
+1. Our .py file is just static code on disk.
+2. We run python app.py.
+3. The OS reads the code, loads the interpreter (python.exe), and creates a "Process".
+4. This Process is an active living thing (just like an object is an active instance of a class).
+5. So,we say: a "running instance" of our program exists now → meaning, it is loaded, it is alive, and it is doing work.
+
+-> So, we can think of a running process as a kind of object created from our program.

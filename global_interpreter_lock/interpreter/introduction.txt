@@ -1,0 +1,12 @@
+--> The interpreter is like a kitchen machine (e.g. an oven or robot) that knows how to follow specific instructions (bytecode).
+
+-> Each thread is like a chef who:
+    * Has their own recipe (Python function),
+    * Needs to use the machine (interpreter) to follow the instructions,
+    * Must wait for their turn (because only one chef at a time can use the machine, due to the GIL).
+
+So:
+    * The interpreter doesn't manage threads;
+    * Threads use the interpreter;
+    * The GIL ensures only one thread can use the interpreter at a time.
+

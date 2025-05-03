@@ -1,0 +1,49 @@
+# basic points:
+1. Threads are workers inside a process.
+2. The process (our program) has the full code and memory.
+3. Threads share the same memory inside a process.
+    But: Each thread has its own call stack (its own running state).
+4. Threads do not automatically "talk" to each other to decide who runs what — the programmer must design how they split work.
+
+Step-1 : How do threads decide who executes which part of the code?
+* Threads do not decide automatically.
+* the programmer design the task splitting.
+
+Meaning:
+    1. When we create threads, we assign different tasks to them.
+    2. Threads are independent — once started, they run what we assigned.
+    3. There is no magical automatic negotiation between threads like:
+        "Hey, you take this part, I take that part!"
+
+It’s the responsibility of our code to say:
+    * Thread 1 will work on Part A,
+    * Thread 2 will work on Part B,
+    * etc.
+
+Step-2. How multiple threads work inside a process?
+-> Think of it like this:
+    * Process : A shared kitchen
+    * Threads : Multiple chefs working in the same kitchen
+
+They share all the kitchen tools (memory, code, files). But each chef (thread) can cook independently. Chefs can
+cook different dishes, or cook the same dish but different parts.
+
+-> In computer terms:
+    * Threads share: memory, open files, global variables.
+    * Threads have: individual call stacks (separate function execution).
+
+Step-3. How threads are connected to each other?
+* Threads exist inside the same process.
+* They share the same address space (same memory).
+-> But threads are not directly "linked" like a train.
+-> Instead:
+    * They live together in the process memory.
+    * They can communicate if needed (by sharing variables, queues, etc.).
+    * Otherwise, they are independent workers running in parallel.
+
+-> If threads need to coordinate, we use Thread Synchronization Tools like: Locks (mutexes), Queues (thread-safe communication), Semaphores, Events
+
+So we can say,
+1. Threads work independently.
+2. Thread scheduling (which thread runs at what time) is done by Operating System, NOT by threads themselves.
+3. Division of work must be done by our code when creating threads.

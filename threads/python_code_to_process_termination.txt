@@ -1,0 +1,143 @@
+# From Python Code to Process Termination Step by Step :
+
+Step-1. Write Python Code ➔ Save .py file
+-> We write your Python code, for example:
+    print("Hello, World!")
+
+What happens:
+    * You create a .py file (plain text).
+    * It's saved on the hard disk (or SSD).
+    * It's not running yet — just text instructions.
+
+Step-2. Run python app.py
+-> We type in the terminal:
+    python app.py
+
+-> Now The Shell or Terminal sends a command to the Operating System. The OS checks:
+    * Is python installed?
+    * Can it find the file app.py?
+
+If yes, then:
+    * python (the interpreter) is launched.
+    * app.py is passed as input to the interpreter.
+
+Step-3. OS Creates a New Process for Python Interpreter
+-> Now, the Operating System:
+    * Creates a new Process.
+    * Allocates virtual memory for it.
+    * Assigns a PID (Process ID) (a unique number like 12345).
+
+-> At this point A "Python Process" exists in RAM (not your code yet, just the interpreter). OS gives it:
+    * Memory space (heap, stack, code area)
+    * CPU scheduling time
+    * File access permissions
+
+-> This Process is like an empty house right now (Python interpreter is alive, but your script isn't loaded yet).
+
+Step-4. Python Interpreter loads app.py
+-> The Python interpreter inside the Process now:
+    * Reads our app.py file.
+    * Parses the code (converts it into Python Abstract Syntax Tree — AST).
+    * Compiles the code into Bytecode (.pyc files if needed).
+    * Prepares the bytecode for execution.
+
+-> Now our Python code is ready inside memory, in a format that the Python interpreter understands.
+
+Step-5. Main Thread is created (Default)
+-> When the Python interpreter runs:
+    * The OS automatically creates a Main Thread inside our Process.
+    * Every process must have at least one main thread to run any instructions.
+
+-> Main Thread:
+    * Has its own call stack (function calls, local variables).
+    * Will execute our Python code.
+
+Step-6. Main Thread starts executing our code
+-> Now the Main Thread starts executing the Python bytecode line-by-line. Example:
+    print("Hello, World!")
+
+* The Main Thread runs print().
+* It sends output to our terminal (standard output - stdout).
+* Then it moves to the next line (if any).
+
+-> At this point:
+    * Python uses interpreted execution (not machine code yet).
+    * Global Interpreter Lock (GIL) ensures only one thread runs Python bytecode at a time (in CPython).
+
+Step-7. We Create More Threads (Optional)
+-> If we have code like:
+    import threading
+    def task():
+        print("From a new thread!")
+
+    t = threading.Thread(target=task)
+    t.start()
+
+What happens:
+    * The Main Thread creates a New Thread.
+    * OS allocates a new small stack for the New Thread inside the same Process.
+    * New Thread starts executing task() separately (possibly at the same time as the main thread — but remember: due to GIL, real
+      concurrency in Python threads is mostly for I/O-bound tasks).
+-> Now our Process has multiple threads.
+
+Step-8. Threads finish their work
+-> Once threads complete:
+    * They exit normally.
+    * Their stack is destroyed.
+    * The OS deallocates their small thread memory.
+    * Control goes back to the Main Thread (or waits if you used thread.join()).
+Example:
+    t.join()  # Wait for t to finish
+Main Thread waits until t (new thread) is finished.
+
+Step-9. Main Thread finishes
+-> After all code is executed:
+    * Main Thread reaches the end of the script.
+    * Main Thread exits.
+When Main Thread exits, the Process is almost done (unless daemon threads are still running).
+
+Step-10. Process terminates (OS frees memory)
+-> After the Main Thread (and all non-daemon threads) finish:
+    * The Python interpreter exits.
+    * The Process is terminated by the OS.
+
+The OS:
+    * Frees all memory used (Heap, Stack, etc.).
+    * Releases file handles (if any were open).
+    * Closes network connections (if any).
+    * Destroys the PID.
+    * Removes the process from the system’s running process table.
+
+Now:
+    * No memory is occupied anymore.
+    * It's like our program was never there (until you run it again).
+
+-> So, Full Cleanup is done.
+
+# Full Visual Chart:
+    Write Python Code → Save (.py) file
+        ↓
+    Run `python app.py`
+        ↓
+    Shell asks OS to run `python`
+        ↓
+    OS creates a Process → Allocates Memory → Assigns PID
+        ↓
+    Python Interpreter loads → Parses → Compiles our code to Bytecode
+        ↓
+    Main Thread is created (automatic)
+        ↓
+    Main Thread executes our code (instruction by instruction)
+        ↓
+    (Optionally) we create more Threads
+        ↓
+    Threads run and finish
+        ↓
+    Main Thread finishes
+        ↓
+    Python Interpreter exits
+        ↓
+    OS terminates Process → Frees all resources
+
+--> When we run a .py file, the Operating System creates a running Process from your code, loads it into memory, executes it through a Main Thread,
+(optionally spawns more threads), and once all work is done, the Process dies, and the OS cleans up everything.

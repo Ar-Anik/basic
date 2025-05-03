@@ -1,0 +1,60 @@
+Q: What Happens When a Thread Runs Python Code?
+
+Step-1: Thread is scheduled by the OS
+The OS says: “Thread A, your turn on the CPU!”
+This thread starts running, and it's trying to execute some Python function.
+
+Step-2: Thread needs to enter the interpreter
+The thread must use the interpreter to run our code. But the interpreter is shared (remember: all threads in the same
+process share one interpreter). If multiple threads access it at the same time, they could corrupt memory, crash, or
+give wrong results.
+
+Step-3: Acquire the GIL (Global Interpreter Lock)
+To protect the interpreter, Python adds a big lock around it called the GIL. Only one thread can hold the GIL at a time.
+So, the thread says: “Hey, can I use the interpreter? I’ll wait if someone else is using it.”
+If the GIL is free, the thread grabs it and proceeds. If not, it waits.
+
+Step-4: Interpreter runs the thread's bytecode
+Now that the thread has the GIL:
+    1. It enters the interpreter loop.
+    2. The interpreter reads bytecode instructions one by one:
+    Example:
+        LOAD_CONST 5
+        LOAD_CONST 7
+        BINARY_ADD
+        PRINT
+
+Each instruction interacts with Python objects:
+    1. Creates numbers, strings, lists.
+    2. Calls functions.
+    3. Modifies objects.
+    4. Updates reference counts (used for memory management).
+
+These operations modify shared memory — this is why only one thread can do this at a time!
+
+Step-5: Memory management (why it's dangerous without GIL)
+Let’s say a thread creates a new object (x = 5):
+    * The interpreter allocates memory for that object.
+    * Sets up the object’s type, value, and reference count (how many variables point to it).
+    * Every operation that reads/writes objects, or adds/removes references, touches shared memory.
+
+-> Without the GIL:
+    * Two threads might try to change the same object’s reference count.
+    * That would corrupt memory and crash your program.
+
+The GIL prevents that.
+
+Step-6: Yielding the GIL
+    * After some time (a few milliseconds or bytecode instructions), the thread voluntarily releases the GIL so other
+      threads can run.
+    * The interpreter keeps track of time and bytecode count.
+    * When the GIL is released, another thread gets a chance to run.
+
+
+So Final Analogy :
+    * The interpreter is a single cash register.
+    * All threads (cashiers) need to use it to process transactions (Python bytecode).
+    * But if two cashiers use it at the same time, they’ll mess up the numbers.
+    * So there's a single key (GIL).
+    * Only the cashier (thread) holding the key can use the register (interpreter).
+

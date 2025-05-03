@@ -1,0 +1,37 @@
+link : https://realpython.com/python-gil/#:~:text=The%20Python%20Global%20Interpreter%20Lock%20or%20GIL%2C%20in%20simple%20words,at%20any%20point%20in%20time.
+
+---> GIL locks interpreter access to Python bytecode execution, meaning: Only one thread can execute Python code at a
+time within a single process.
+
+----> Each thread comes with its own execution context and uses the shared Python interpreter to execute its function’s
+      bytecode. The GIL ensures that only one thread can execute bytecode at a time by locking access to the interpreter
+      and shared Python memory structures such as objects, reference counts, and memory allocations.
+
+----> Each thread knows which function it is running. That function contains bytecode. When the thread acquires the GIL,
+      it enters the interpreter loop, which executes the function’s bytecode one instruction at a time.
+
+Main Follow :
+    [We run script.py]
+            ↓
+    [OS creates Python process]
+            ↓
+    [Interpreter loads and initializes]
+            ↓
+    [Interpreter reads source code]
+            ↓
+    [Compiler compiles to bytecode]
+            ↓
+    [Main thread created]
+            ↓
+    [OS schedules thread]
+            ↓
+    [Thread acquires GIL]
+            ↓
+    [Thread enters interpreter loop]
+            ↓
+    [Interpreter executes bytecode step by step]
+            ↓
+    [GIL released occasionally for fairness]
+            ↓
+    [Execution completes or switches thread]
+
