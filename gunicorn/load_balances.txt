@@ -1,0 +1,45 @@
+Q : How Gunicorn Load Balances Among Workers?
+-> Gunicorn uses the “pre-fork worker model”, which means : when we run, gunicorn myproject.wsgi:application --workers 3 then
+Gunicorn creates a master process. This is the main parent process. It is responsible for:
+    * Spawning worker processes
+    * Managing workers
+    * Handling Unix signals (e.g. restart, shutdown)
+    * Binding to the network socket (e.g., port 8000)
+-> In the above command, Gunicorn will create 3 worker processes. These are independent OS-level processes (not threads).
+Each worker:
+    * Waits for incoming HTTP connections
+    * Handles Django requests
+    * Returns responses to clients
+-> The main Gunicorn process (the master) listens on a socket or port (e.g., 127.0.0.1:8000). When an HTTP request comes
+in, the master process:
+        * Distributes the request to one of the available worker processes.
+        * It uses the operating system’s scheduling mechanism (like SO_REUSEPORT in Linux) to distribute requests.
+
+Q : What Load Balancing Strategy?
+-> Gunicorn relies on the OS kernel (like Linux) to distribute TCP connections(https request) among processes.
+This is known as:
+    * Socket-level round-robin distribution (or)
+    * First-available worker (depending on OS and system call availability)
+So it’s not load balancing by CPU load — but rather by connection availability.
+
+Q : What does “not by CPU load, but by connection availability” mean?
+-> It means that Gunicorn doesn't check which worker is busiest (CPU-wise) before sending it a request. Instead, it gives the
+request to the next worker that is free and ready, regardless of how much CPU work each has done so far. Gunicorn’s master
+process hands incoming HTTP requests to workers using the operating system’s socket system (e.g., accept() call in Linux).
+This means:
+    * Whichever worker is free and listening will accept the next incoming connection.
+    * The OS doesn’t know or care how “busy” the CPU is — it just passes the next connection to an available process.
+
+-> Example: 3 workers, uneven CPU usage
+    * If worker 1 just finished processing and is listening again, it may get another request immediately.
+    * If worker 2 is still processing a heavy image upload, the OS won’t wait for it to be free.
+    * If worker 3 is idle, it might still get ßßßfewer requests if worker 1 keeps becoming ready quickly.
+
+# The downside of OS label load balancing?
+-> This can cause unbalanced CPU usage: Some workers may end up doing more work than others, especially if requests
+take different amounts of time. One worker could get stuck on a heavy request while others handle many light ones.
+That’s why for CPU-heavy or async-heavy workloads raise, for avoid this people use:
+    * Asynchronous workers (--worker-class gevent, uvicorn with ASGI)
+    * External load balancers (like Nginx, HAProxy)
+    * Autoscaling with containers/VMs in production
+

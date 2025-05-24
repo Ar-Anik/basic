@@ -1,0 +1,17 @@
+--> Gunicorn run django application like runserver(web-server)
+
+Q : How Does Gunicorn Run Django App?
+1. Django provides a WSGI application object: In our project’s wsgi.py, we’ll see something like:
+    from django.core.wsgi import get_wsgi_application
+    application = get_wsgi_application()
+
+* This application is a callable WSGI app.
+* It knows how to receive an HTTP request and return a response.
+
+2. Gunicorn loads that WSGI app:
+When we run:  gunicorn myproject.wsgi:application
+Gunicorn:
+    * Imports our myproject/wsgi.py
+    * Calls the application object when a request comes in
+    * Manages workers, connections, timeouts, etc.
+

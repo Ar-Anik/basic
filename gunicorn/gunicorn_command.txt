@@ -1,0 +1,10 @@
+1. run application : gunicorn dashboardpro.wsgi:application
+
+2. run application with 3 worker : gunicorn dashboardpro.wsgi:application --workers 3
+
+3. run application with 3 worker and show which worker handle which request :
+gunicorn dashboardpro.wsgi:application --workers 3  --access-logfile - --access-logformat '%(p)s %(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'
+
+4. Default port of Gunicorn is: 8000
+To specify a custom port Use the --bind (or -b) option: gunicorn myproject.wsgi:application --bind 0.0.0.0:8080
+The Gunicorn process will start and bind to all host IP addresses on port 8081

@@ -1,0 +1,33 @@
+template : https://docs.djangoproject.com/en/5.2/topics/templates/
+template-tag : https://docs.djangoproject.com/en/5.2/ref/templates/builtins/#ref-templates-builtins-tags
+
+multiple template engine :
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',  # Default Django engine
+        'DIRS': [BASE_DIR / 'templates'],  # Your template directory
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+    {
+        'BACKEND': 'django.template.backends.jinja2.Jinja2',  # Jinja2 engine
+        'DIRS': [BASE_DIR / 'jinja_templates'],  # Folder for Jinja templates
+        'APP_DIRS': False,  # Jinja2 doesn’t support this
+        'OPTIONS': {
+            'environment': 'myproject.jinja2.environment',  # Your custom environment setup
+        },
+    },
+]
+
+->  In this case:
+    * Django will first look for the template using the Django template engine.
+    * If not found, it will try the Jinja2 engine.
+    * If no engine finds the template, Django raises a TemplateDoesNotExist error.
+

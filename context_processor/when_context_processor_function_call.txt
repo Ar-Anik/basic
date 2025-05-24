@@ -1,0 +1,140 @@
+Q : What happen after render() is called in django?
+Step-1 : View Calls render()
+We call Django’s render shortcut:
+    return render(request, 'shop/home.html', {'products': products})
+
+Step-2 : render() Function Internally Does the Following
+Location: django.shortcuts.render
+from django.template import loader
+def render(request, template_name, context=None, content_type=None, status=None, using=None):
+    content = loader.render_to_string(template_name, context, request, using=using)
+    return HttpResponse(content, content_type, status)
+
+Step-3 : render_to_string() is Called
+Location: django.template.loader
+def render_to_string(template_name, context=None, request=None, using=None):
+    template = get_template(template_name, using=using)
+    return template.render(context, request)
+
+Step-4 : get_template(template_name) is Called
+This loads and parses the template:
+    1. Searches in TEMPLATES['DIRS'], app templates/ folders, etc.
+    2. Compiles the template into a Django Template object
+
+Q : What means by parse in template ?
+-> Reading and analyzing the template file and converting its tags, variables, and logic into Python code
+or internal structures that can be rendered into HTML.
+
+Django scans the file and processes:
+    1. {{ variables }}
+    2. {% tags like for, if, include %}
+    3. {# comments #}
+
+This is like converting a raw template into a Python-friendly format — Django builds an internal
+representation (like a tree of nodes). Django compiles this structure into objects it can evaluate
+later with actual data (context).
+
+# Example :
+<h1>{{ user.username }}</h1>
+{% if products %}
+    {% for product in products %}
+        <li>{{ product.name }}</li>
+    {% endfor %}
+{% else %}
+    <p>No products available.</p>
+{% endif %}
+
+During Parsing:
+    * Django notes that {{ user.username }} is a variable.
+    * {% if products %} and {% for %} are control structures.
+    * These are parsed into nodes in an internal representation (like a tree structure).
+
+Step-5 : Template is Now a Template Object
+Example: template = TemplateObject(...)  # Ready for rendering
+
+Step-6 : Build Full Context (View Context + Context Processors)
+
+    context = RequestContext(request, dict_passed_from_view)
+
+At this point:
+    1. Context passed by the view: {'products': products}
+    2. Context processors are called (from TEMPLATES['OPTIONS']['context_processors'])
+    3. All returned values are merged into the full context.
+
+Example combined context:
+    {
+        'products': [...],
+        'site_name': 'MyStore',
+        'current_year': 2025,
+        'client_ip': '127.0.0.1',
+        'request_path': '/shop/',
+        ...
+    }
+
+Step-7 : Template Engine Renders the Template
+-> This is where processing happens. Processing means:
+    1. Resolving {% for product in products %} ... {% endfor %}
+    2. Running {% if %} logic blocks
+    3. Replacing {{ variables }}
+    4. Applying filters: {{ date|date:"Y-m-d" }}
+    5. Handling {% include %}, {% block %}, {% extends %}
+
+Step-8 : Final HTML String is Generated
+At this point, Django has produced a pure HTML string like:
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MyStore</title>
+</head>
+<body>
+  <h1>Welcome to MyStore</h1>
+  <ul>
+    <li>Shirt</li>
+    <li>Shoes</li>
+  </ul>
+</body>
+</html>
+
+Step-9 : Wrap in HttpResponse
+    return HttpResponse(rendered_string, content_type='text/html')
+
+Step-10 : Django Middleware (Optional Step)
+Before going out to the browser, the response may pass through middleware, which can:
+    1. Modify the response
+    2. Add headers
+    3. Cache content
+
+Step-11 : WSGI Handler Sends Response to Web Server
+    1. Django sends the HttpResponse to the WSGI layer
+    2. WSGI hands it over to the web server (e.g., runserver, Gunicorn)
+
+Step-12. Web Server Sends HTML to the Browser
+    Browser receives and renders the HTML.
+
+-> Visual Flow Summary (Text Diagram) :
+    [View Function]
+        ↓
+    render(request, 'template.html', context)
+        ↓
+    get_template(template_name)
+        ↓
+    Template file loaded from filesystem
+        ↓
+    Context built: view context + context processors
+        ↓
+    Template engine processes:
+        - {% tags %}
+        - {{ variables }}
+        - filters
+        ↓
+    Final HTML string rendered
+        ↓
+    HttpResponse(html)
+        ↓
+    Django middleware (optional)
+        ↓
+    WSGI handler
+        ↓
+    Web server (runserver, Gunicorn)
+        ↓
+    Client browser gets response

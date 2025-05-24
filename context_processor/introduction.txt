@@ -1,0 +1,44 @@
+--> A context processor is a Python function that provides extra variables to all templates. It's a way to make data globally
+available in templates without passing it explicitly in every view.
+
+# Problem: Suppose we want to show the site name or current year on every page. we have to pass the same data in every view
+like:
+    return render(request, 'home.html', {'site_name': 'MySite'})
+This becomes repetitive.
+
+# Solution: Use a context processor to make site_name available to all templates automatically.
+
+# How to add context processor in application :
+-> Step-1 : Create a context processor function
+In an app folder create:
+location :  myapp/context_processors.py
+    from datetime import datetime
+
+    def global_variables(request):
+        return {
+            'site_name': 'MySite',
+            'current_year': datetime.now().year,
+        }
+
+-> Step 2: Add it to our settings
+location : settings.py:
+    TEMPLATES = [
+        {
+            ...
+            'OPTIONS': {
+                'context_processors': [
+                    ...
+                    'myapp.context_processors.global_variables',
+                ],
+            },
+        },
+    ]
+
+-> Step 3: Use in our templates
+Now we can access site_name and current_year in any template:
+    <footer>
+      &copy; {{ current_year }} {{ site_name }}. All rights reserved.
+    </footer>
+
+-> we didn’t pass anything from the view — Django did it automatically!
+

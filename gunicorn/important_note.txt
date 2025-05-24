@@ -1,0 +1,64 @@
+-> Multiple Worker Processes : In Gunicorn, a worker process is a separate, independent Python process that handles
+incoming HTTP requests. When we say "multiple worker processes", it means Gunicorn spawns several separate processes
+to serve multiple requests in parallel. Each process has its own memory space and Python interpreter. These processes
+are managed by Gunicorn’s master process. They can handle different requests at the same time, allowing better
+scalability on multi-core CPUs.
+
+If we run: gunicorn myapp:app --workers 4
+then gunicorn will create:
+    * 1 master process
+    * 4 worker processes (each can handle a request independently)
+
+-> Multiple Worker Threads in a Worker Process : Each worker process can optionally be configured to spawn multiple
+threads, and these threads share the memory of the parent process.A thread is a lightweight unit of execution inside
+a process. Multiple threads in the same process can handle multiple requests concurrently, especially useful for I/O-
+bound workloads (like waiting for a database or external API).
+
+If we run: gunicorn myapp:app --workers 4 --threads 2
+Gunicorn will create:
+    4 worker processes
+    Each worker will have 2 threads (total 8 threads), able to handle 8 requests at once
+
+-> Each Gunicorn worker is a separate Python process, and it loads our entire Django application. So if we have 4
+workers, we have 4 independent instances of our Django app running in parallel.
+
+# When a request comes in:
+    * Nginx forwards it to Gunicorn.
+    * Gunicorn passes it to one already running worker.
+    * That worker handles the request (either via a thread, coroutine, or blocking I/O, depending on worker type).
+    * The worker then returns the response back to Gunicorn → Nginx → Client.
+
+-> Gunicorn is pre-forking: it starts multiple worker processes in advance and each worker handles many requests,
+one at a time (in sync workers) or concurrently (in async/threaded workers).
+
+Q : Can one Gunicorn worker (i.e., one instance of a Django application) handle multiple requests at a time?
+--> The answer depends on the worker class used by Gunicorn:
+1. Gunicorn Worker Types (default: sync) :
+Worker Class	                    Concurrent Requests per Worker	        Notes
+sync (default)	                    ❌ One request at a time	            Each worker blocks on a request
+gthread	                            ✅ Yes (multi-threaded)	                Can handle multiple requests per worker using threads
+gevent (async)	                    ✅ Yes (uses greenlets)	                Handles thousands of concurrent I/O-bound requests
+uvicorn.workers.UvicornWorker	    ✅ (ASGI async)	                        For async Django with ASGI (e.g., Django Channels or async views)
+
+
+-> Gunicorn’s default sync worker handles only one request at a time per worker.
+sync is the default WSGI worker class in Gunicorn. It runs a synchronous WSGI application, like standard Django (wsgi.py).
+Each sync worker handles one request at a time — it blocks until the response is finished.
+So,
+    * The Gunicorn worker (when using sync class) is a WSGI worker.
+    * WSGI = synchronous.
+    * One sync worker = one instance of Django = one request at a time.
+
+-> Gunicorn’s gthread, gevent, or async workers (like UvicornWorker) can handle multiple requests concurrently per worker.
+
+So,
+Gunicorn
+│
+├── Worker (sync)  ← WSGI worker
+│   └── Handles 1 request at a time
+│
+├── Worker (gthread) ← Still WSGI, but multithreaded
+│   └── Handles multiple requests per worker
+│
+└── Worker (uvicorn.workers.UvicornWorker) ← ASGI (for async Django)
+    └── Handles many concurrent requests per worker (event loop)
