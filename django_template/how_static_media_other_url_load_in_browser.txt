@@ -1,0 +1,76 @@
+-> No, static, media, and other file URLs are NOT "hit" (requested) by Django before the template loads in the browser.
+
+Q : How Django Template Handles Static, Media and Other file URLs?
+Step-1. User Requests a Web Page
+User enters a URL in the browser: http://shop.com/products/
+
+Step-2. Browser Sends HTTP Request to Django Server
+Browser performs a GET request to the Django server: GET /products/ HTTP/1.1
+
+Step-3. Django Handles the Request
+Django uses the URLconf (urls.py) to find the matching view:
+    path("products/", views.product_list, name="product_list")
+View logic is executed like :
+def product_list(request):
+    products = Product.objects.all()
+    return render(request, "products/list.html", {"products": products})
+
+Step-4. Django Renders the Template
+Django loads products/list.html.
+Template tags like:
+    <img src="{{ product.image.url }}">
+    <link href="{% static 'css/style.css' %}">
+are converted to actual URLs:
+    <img src="/media/images/p1.jpg">
+    <link href="/static/css/style.css">
+Django sends back a complete HTML string as a response.
+
+Step-5. Browser Receives the HTML Response
+Browser receives something like:
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Products</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <h1>Product List</h1>
+  <img src="/media/images/p1.jpg">
+</body>
+</html>
+
+At this point, only the HTML is received — no CSS, JS, or images yet.
+
+Step-6. Browser Parses the HTML
+The browser parses the HTML line by line and builds the DOM (Document Object Model).
+
+Q : what means by parse html?
+-> The browser reads the HTML file line by line, understands the structure, and builds a DOM (Document Object Model) from it.
+
+While parsing, it finds:
+    1. <link href="/static/css/style.css">
+    2. <script src="/static/js/app.js">
+    3. <img src="/media/images/p1.jpg">
+
+Step-7. Browser Sends New Requests for Static & Media Files
+For each external resource, browser sends HTTP GET requests:
+    /static/css/style.css → for CSS
+    /static/js/app.js → for JS
+    /media/images/p1.jpg → for image
+
+These are new requests that happen after the HTML is parsed.
+
+Step-8. Django or Web Server Serves Static/Media Files
+    * If in development, Django serves these files via django.contrib.staticfiles.
+    * If in production, a web server (like Nginx) usually serves them.
+
+Each file returns:
+    * 200 OK (if found)
+    * 404 Not Found (if missing)
+
+Step-9. Browser Renders the Page
+Once all CSS, JS, and images are fetched:
+    * CSS is applied
+    * JS is executed
+    * Images are rendered
+Now the user sees a fully loaded and styled web page.
