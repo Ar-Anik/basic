@@ -1,0 +1,94 @@
+-> We can configure the number and behavior of NGINX workers.
+
+Q : What Is an NGINX Worker?
+NGINX uses a multi-process, event-driven architecture consisting of:
+1. Master Process:
+    * Reads the config (nginx.conf).
+    * Manages signals (reload, stop, etc.).
+    * Spawns and monitors worker processes.
+2. Worker Processes:
+    * Accept incoming connections.
+    * Process HTTP requests.
+    * Serve static files.
+    * Proxy requests to upstream servers (like Gunicorn).
+    * Each handles thousands of concurrent connections using non-blocking I/O.
+    * NGINX worker processes are independent. Does not share memory (by default).
+    * Workers don’t communicate directly between them.
+
+# Default Worker Configuration
+By default, when we install NGINX:
+worker_processes 1;  # or 'auto' in newer versions
+events {
+    worker_connections 1024;
+}
+This means:
+    * 1 NGINX worker process.
+    * Each worker can handle up to 1024 simultaneous connections.
+    * Total concurrent connections = worker_processes × worker_connections = 1 × 1024 = 1024 max connections.
+
+Q : How NGINX Workers Work Internally?
+NGINX workers use the epoll (Linux) or kqueue (BSD/macOS) event notification mechanisms. This allows:
+    * One process to manage thousands of open connections at once.
+    * No need for multi-threading or creating a thread per connection.
+    * Very low CPU and memory usage, even under heavy load.
+Worker flow:
+    * NGINX master starts N workers.
+    * Each worker waits on a shared socket for client connections.
+    * An OS-level load balancer distributes connections across workers (via SO_REUSEPORT or accept mutex).
+      Each worker:
+        -> Accepts a request.
+        -> Reads HTTP headers.
+        -> Serves static files directly OR proxies to Gunicorn (or other upstream).
+        -> Uses non-blocking I/O to read/write to the client.
+
+
+# Interaction with Gunicorn
+    Client -> NGINX (4 workers) -> Gunicorn (4 workers) -> Django App
+* NGINX workers act as reverse proxies.
+* They forward requests to Gunicorn using:
+    1. HTTP over TCP: proxy_pass http://127.0.0.1:8000;
+    2. Or UNIX sockets: proxy_pass http://unix:/path/to/socket.sock;
+* They receive the response from Gunicorn and send it back to the client.
+
+All dynamic logic is processed by Gunicorn. NGINX just moves the HTTP requests/responses back and forth.
+
+# Tuning NGINX Workers
+Worker Count :
+    worker_processes auto;  # Best practice
+It Spawns workers equal to number of CPU cores.
+
+We can also set it manually:
+    worker_processes 4;  # For 4 cores
+Worker Connections :
+    events {
+        worker_connections 4096;
+    }
+Each worker can handle 4096 simultaneous connections. So,
+    4 workers × 4096 = 16384 simultaneous connections
+
+
+# Optionally we can assign each worker in a specific cpu core :
+    worker_cpu_affinity 0001 0010 0100 1000;
+Each worker binds to a specific CPU core (Linux only). Useful for performance tuning on multi-core systems.
+
+
+# Running Workers Check Command :
+    ps -ef | grep nginx
+this will be output like :
+root     1001  ... nginx: master process /usr/sbin/nginx
+nginx    1002  ... nginx: worker process
+nginx    1003  ... nginx: worker process
+nginx    1004  ... nginx: worker process
+nginx    1005  ... nginx: worker process
+
+
+# When to Increase Worker Count
+Increase NGINX workers if:
+    * We're serving a lot of static files.
+    * We're terminating many HTTPS connections.
+    * We're using long-lived connections (WebSocket, SSE).
+    * We're hitting the worker_connections limit.
+BUT: For dynamic apps (like Django), this only helps if Gunicorn is scaled properly.
+
+--> More NGINX workers mean better concurrency for I/O-bound tasks (TLS, file serving, proxying)
+To improve Django view performance, we must increase Gunicorn workers, not NGINX workers.

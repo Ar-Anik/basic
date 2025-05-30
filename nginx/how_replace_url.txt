@@ -1,0 +1,102 @@
+server {
+        listen       8080;
+        server_name  localhost;
+
+        location /static/ {
+                alias /Users/aubdurrobanik/Desktop/test_project/static_file/dashboardpro/staticfiles/;
+        }
+
+        location /media/ {
+                alias /Users/aubdurrobanik/Desktop/test_project/static_file/dashboardpro/media/;
+        }
+
+        location / {
+            proxy_pass http://127.0.0.1:8001;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /test {
+            return 200 'Nginx is serving this request.\n';
+            add_header Content-Type text/plain;
+        }
+
+    }
+
+Q : How Internally Nginx Replace Url ?
+--> From Request to Response Full Flow :
+Step-1: Request comes in on port 8080
+Example: http://localhost:8080/static/css/style.css
+Here,
+    Domain (host): localhost
+    Port: 8080
+    URL PATH: /static/css/style.css
+
+Step-2: Nginx receives the request
+Because listen 8080; is configured, Nginx handles the request.
+
+Step-3: Nginx checks server_name and active server block
+It finds the matching server_name localhost; (if you had multiple server blocks).
+
+Step-4: Nginx checks the request path (after domain and port)
+From the URL:
+    Full URL: http://localhost:8080/static/css/style.css
+    Domain part: localhost:8080
+    Path part: /static/css/style.css
+
+Step-5: Nginx checks location blocks to match the path
+It looks for the best location match — in this case /static/.
+
+Step-6: If matched and alias is used:
+Nginx removes the /static/ from the path. Appends the remaining part (css/style.css) to the alias path:
+    /Users/aubdurrobanik/Desktop/.../staticfiles/css/style.css
+Nginx reads this file from disk.
+
+Step-7: Nginx builds a response with the file contents
+It returns the file content (e.g., CSS) to the browser with the correct headers.
+
+Step-8. If no alias match, it falls back to location /
+    This block uses: proxy_pass http://127.0.0.1:8001;
+Nginx forwards the request to our Django app running on port 8001.
+
+So, Full Flow :
+    1. Request comes to Nginx on port 8080
+    2. Nginx checks which `server` block matches (e.g., server_name)
+    3. Nginx checks the request path (e.g., /static/css/style.css)
+    4. Nginx tries to match `location` blocks
+       - If path starts with /static/ → use `alias` to get real file
+       - If path starts with /media/ → use `alias` to get real file
+       - Else → fallback to `location /` → use `proxy_pass` to forward to Django
+    5. If it's a static/media file:
+       - Nginx reads the file from disk
+       - Sends it back as HTTP response
+    6. If proxy:
+       - Forwards the request to Django at http://127.0.0.1:8001
+       - Sends Django's response back to the browser
+
+
+Q : How Nginx serves files using alias or root in a location ?
+--> When a url match with a specific location like url is : http://localhost:8080/static/css/style.css
+and location is :
+location /static/ {
+                alias /Users/aubdurrobanik/Desktop/test_project/static_file/dashboardpro/staticfiles/;
+        }
+url match with a location block, Nginx automatically knows this is a file-serving block because of the
+alias (or root) directive. It uses the final resolved path to look up a file. After get a file nginx make
+a response.
+
+
+# location /test {
+            return 200 'Nginx is serving this request.\n';
+            add_header Content-Type text/plain;
+        }
+Q : What happens when request comes to /test ?
+Nginx matches the location /test. Sees this is a return block — so it does not try to read any file.
+It directly:
+    Returns HTTP status code 200
+    Sends the string 'Nginx is serving this request.\n'
+    Sets the Content-Type: text/plain header
+This is a manual response. Nginx does not try to read a file — it just replies with a raw message.
+

@@ -1,0 +1,24 @@
+--> Gunicorn workers do not typically communicate directly among themselves. Each Gunicorn worker is an
+independent process (or thread, depending on the worker class) and handles requests in isolation.
+
+# Inter-Process Communication (IPC) Among Workers
+--> Gunicorn does not provide any built-in inter-worker communication mechanism. However, if our application
+needs to share state or data across workers, we must use external mechanisms such as:
+
+1. Shared Database (e.g., PostgreSQL, MySQL):
+    -> Workers read/write to the same database.
+
+2. Cache or Pub/Sub (e.g., Redis, Memcached):
+    -> Redis Pub/Sub can be used to send messages to all listening workers.
+    -> Useful for broadcasting changes (e.g., updated config, logout events).
+
+3. Shared File System:
+    -> Workers can read/write temporary files, though this is not very efficient or recommended.
+
+
+Q : Why Workers Don’t Share State by Default ?
+    * Isolation: Prevents one worker's crash or memory leak from affecting others.
+    * Scalability: Allows independent scaling across machines/containers.
+    * Simplicity: Easier to debug, maintain, and scale.
+This design follows the Unix philosophy: "Do one thing well and don’t share memory between processes
+unless absolutely necessary."

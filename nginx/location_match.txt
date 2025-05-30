@@ -1,0 +1,50 @@
+Q : How does Nginx decide which location block to use when there are multiple matches?
+--> When multiple location blocks can match a request, Nginx chooses the most specific one — the one
+with the longest matching prefix.
+
+suppose we have two location block :
+location /static/ {
+    # Some config here (A)
+}
+
+location /static/css/ {
+    # Some config here (B)
+}
+
+Request : http://localhost:8080/static/css/style.css, here Path part is: /static/css/style.css
+Nginx checks:
+    1. /static/ — matches
+    2. /static/css/ — also matches, and it's more specific
+
+Result: location /static/css/ will be used, because it's the longest matching prefix.
+
+# Nginx follows location priority order :
+1. location = → exact match (highest priority)
+location = /static/css/style.css {
+    return 200 "Exact match location block\n";
+}
+Used only when the request path exactly matches /static/css/style.css. Highest priority, No regex no
+wildcard — just exact equality.
+
+2. location ^~ → prefix match but disables regex checks
+location ^~ /static/ {
+    return 200 "Prefix match with ^~ (no regex checked)\n";
+}
+If the URI starts with /static/, this will match. Skips any ~ (regex) checks that would normally follow.
+Useful when we want prefix match to win even if a regex could match.
+
+3. location ~ / ~* → regex match
+location ~ \.css$ {
+    return 200 "Regex match (ends with .css)\n";
+}
+Matches any URI ending with .css, Case-sensitive by default. like match /style.css or /static/css/style.css etc.
+Used only if no exact or ^~ matches
+
+4. Regular prefix location /something/
+location /static/ {
+    return 200 "Regular prefix match\n";
+}
+Lowest in priority. Matches if URI starts with /static/. Only used if:
+    * No exact match
+    * No ^~
+    * No regex match found

@@ -1,0 +1,41 @@
+Q : What is HTTPS ?
+-> HTTPS (HyperText Transfer Protocol Secure) is the secure version of HTTP. It uses SSL/TLS (Secure
+Sockets Layer / Transport Layer Security) to encrypt the communication between the client and the server.
+
+Q : How HTTPS Transfers Data?
+Step-1: Client initiates a connection
+When you visit a website like https://example.com, Your browser sends a request to connect to the server
+over port 443 (standard for HTTPS).
+
+Step-2: Server responds with SSL certificate
+The server sends back its SSL certificate, which includes:
+    1. The server's public key
+    2. Domain name
+    3. Digital signature (signed by a trusted Certificate Authority - CA)
+
+Step-3. Client verifies the certificate
+The browser checks:
+    * Is the certificate valid?
+    * Is it issued by a trusted CA?
+    * Is it for the correct domain?
+If all checks pass, the browser proceeds.
+
+Step-4. Client generates a symmetric key
+The browser creates a symmetric session key (used to encrypt data). This key is encrypted using the server's
+public key (from the SSL certificate). The encrypted key is sent to the server.
+
+Step-5. Server decrypts the session key
+The server uses its private key to decrypt the symmetric key. Now both the client and server share the same
+symmetric key.
+
+Step-6. Encrypted data transfer begins
+All communication (e.g., HTTP requests and responses) is now encrypted with the shared symmetric key.
+This includes:
+    * Login info
+    * Form submissions
+    * API requests/responses
+    * Media content
+
+Step-7. Data is decrypted on arrival
+The browser and server each decrypt the received data using the symmetric key. No third party (like a hacker
+on the same Wi-Fi) can read the content.

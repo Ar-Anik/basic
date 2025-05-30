@@ -1,0 +1,111 @@
+Q : What is Nginx?
+Nginx (pronounced "engine-x") is:
+    * A web server that delivers web pages to users.
+    * A reverse proxy that passes requests to other servers.
+    * A load balancer that distributes traffic across servers.
+    * A content cache to speed up responses.
+Think of Nginx as a middleman between the user and our web application or server.
+
+
+Q : Why Do We Use Nginx?
+    * To serve static files (HTML, CSS, JS, images).
+    * To forward requests to backend apps (like Django, Flask, Node.js).
+    * To handle multiple users efficiently (better than traditional web servers).
+    * To improve performance and security.
+
+
+Q : How Nginx Works ?
+-> Step 0: Setup and Configuration
+Before Nginx can serve anything, we must configure it using /etc/nginx/nginx.conf or a site-specific file in /etc/nginx/sites-available/.
+we define:
+    * Which domain (server block)
+    * What port (usually 80 or 443)
+    * Whether to serve static files or proxy to an app (like Django)
+    * SSL certificate paths (if HTTPS)
+    * Cache, compression, logging, etc.
+
+-> Step-1: Client (Browser) Makes a Request
+User types in: https://example.com
+Browser sends an HTTP or HTTPS request to the server’s IP (DNS resolves this behind the scenes).
+If HTTPS: Uses port 443
+If HTTP: Uses port 80
+
+-> Step-2: TCP Connection Established
+Before anything else: Browser and server perform a TCP 3-way handshake to open a reliable connection.
+
+-> Step-3: (Only for HTTPS): TLS Handshake
+When Client (Browser) makes a first-time HTTPS request where No existing session and Wants to connect securely to a web server (like Nginx)
+-> Nginx sends its SSL certificate this certificate includes Nginx’s public key and proves its identity.
+-> Browser verifies it, the browser checks:
+    * Is it from a trusted Certificate Authority (CA)?
+    * Does it match the domain name?
+    * Is it not expired?
+-> create a shared encryption key, this key is created depends on the TLS version:
+* In TLS 1.3 (modern): The shared key is created using Elliptic Curve Diffie-Hellman (ECDHE) during the handshake — using mathematical
+exchange, without sending the key over the network.
+* In TLS 1.2 (older): The browser may generate a “pre-master key”, encrypt it using Nginx’s public key, and send it to Nginx — then both
+sides derive the session key from that.
+-> Now all data is encrypted from this point forward: requests/responses are encrypted using the shared session key. No one (like hackers
+or ISPs) can read or change the data.
+
+Now After TLS Handshake Encrypted HTTPS connection is ready. On the other hand, for HTTP (Unencrypted): No TLS handshake No certificate,
+no encryption, Data (headers, content, cookies, passwords) is sent in plain text, Anyone on the network (like hackers or ISPs) can see or
+modify it
+
+-> Step-4: Nginx Receives the Request
+Now the actual HTTP request reaches Nginx. Example :
+    GET /about.html HTTP/1.1
+    Host: example.com
+Nginx checks:
+    * Which server block matches the domain
+    * What rules apply for this URL
+
+-> Step-5: Nginx Acts Based on Configuration
+1st Check: Is SSL (HTTPS) being used?
+This check happens first before routing the request. If the request is HTTPS, the TLS handshake has already happened. That means:
+    * The request has been decrypted by Nginx using the shared TLS session key.
+    * When Nginx sends the response, it encrypts it before returning it to the browser.
+So, Nginx handles encryption/decryption before checking if it's static or dynamic
+
+2nd Check: Is it a Static File?
+If the URL matches a static path (like /static/, /images/, /index.html, etc.):
+    * Nginx reads the file from the filesystem
+    * Sends it directly to the browser
+    * Super fast — no need to contact any backend app
+Nginx is extremely efficient at serving static files.
+
+3rd Check: Is it a Dynamic Page (Backend App)?
+If the URL does not match a static route and needs to be handled by your app (e.g., Django, Flask, Node.js):
+    * Nginx proxies the request to a backend service (e.g., Gunicorn, uWSGI), for example :
+        location / {
+            proxy_pass http://127.0.0.1:8000;
+        }
+    * Nginx waits for the response
+    * Forwards the response back to the client (browser)
+
+-> Step 6: Response Goes Back to Browser
+Nginx sends back:
+    * HTML, CSS, JavaScript
+    * JSON from APIs
+    * Images, files, etc.
+If HTTPS: Data is encrypted
+Browser renders the page.
+
+-> Step 7: Connection Reuse or Close
+If keep-alive is enabled, the connection stays open for more requests. Otherwise, TCP connection is closed.
+
+
+Q : What Nginx Can Do ?
+    * Serve static files (HTML, CSS, JS, images)
+    * Reverse proxy to apps (Django, Flask, Node.js, etc.)
+    * Handle SSL/TLS (HTTPS)
+    * Load balancing
+    * Compression (gzip)
+    * Caching
+    * Logging and monitoring
+    * Security rules (rate limiting, IP blocking, etc.)
+
+
+# Nginx Default Port : Nginx uses two default ports
+    * Port 80 — Default for HTTP
+    * Port 443 — Default for HTTPS
