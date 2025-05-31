@@ -1,0 +1,63 @@
+Q : How Nginx Load Balances ?
+--> Nginx performs load balancing by acting as a reverse proxy, sitting in front of multiple backend servers
+(also called upstream servers) and forwarding incoming client requests to one of them.
+
+
+Q : How Nginx Load Balancer Works (Internals) ?
+--> Nginx uses the upstream block to define backend servers and uses one of several load balancing methods
+(algorithms) to decide where to route traffic.
+
+# Basic Configuration:
+http {
+    upstream myapp {
+        server 192.168.0.101;
+        server 192.168.0.102;
+        server 192.168.0.103;
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://myapp;
+        }
+    }
+}
+
+
+1. Load Balancing Methods:
+Round Robin (default). Requests are distributed sequentially.
+Example: 1st request to server1, 2nd to server2, 3rd to server3, then back to server1.
+
+2. Least Connections
+The request goes to the server with the fewest active connections.
+upstream myapp {
+    least_conn;
+    server 192.168.0.101;
+    server 192.168.0.102;
+}
+
+3. IP Hash
+A client's IP address determines which server handles their request. This provides session persistence.
+upstream myapp {
+    ip_hash;
+    server 192.168.0.101;
+    server 192.168.0.102;
+}
+
+4. Custom Weights
+We can assign more traffic to more powerful servers.
+upstream myapp {
+    server 192.168.0.101 weight=3;
+    server 192.168.0.102;
+}
+here weight=3 means:
+For every 4 requests, Nginx will send:
+    * 3 requests to 192.168.0.101
+    * 1 request to 192.168.0.102
+So the load distribution ratio is 3:1, not simultaneous handling.
+
+
+# Health Checks (via 3rd-party or Nginx Plus)
+    * Nginx Open Source doesn't have built-in active health checks.
+    * Nginx Plus supports checking if servers are alive and automatically removes failed ones from rotation.
