@@ -1,0 +1,42 @@
+--> process_template_response() is a special middleware hook in Django that is only called if the response returned
+by a view is an instance of TemplateResponse or its subclass. It allows us to:
+    * Modify the response's context before it is rendered.
+    * Change the template or logic dynamically.
+    * Inject data into the response globally.
+
+Q : When is process_template_response() called?
+-> It is called after the view executes but before the response is rendered or Template is render. Called only if the
+response has a .render() method, i.e., is a TemplateResponse.
+
+-> process_template_response() called after the view function is executed, but before the template is rendered.
+Middleware Order:
+    1. __init__ (once per server start)
+    2. __call__ → process_request(request)
+    3. View is called.
+    4. If the view returns a TemplateResponse, then process_template_response(request, response) is called.
+    5. The response is rendered (response.render()).
+    6. Then process_response(request, response) is called.
+
+# Lifecycle Flow with TemplateResponse
+1. View returns a TemplateResponse: return TemplateResponse(request, 'hello.html', context)
+2. Django detects it's a TemplateResponse.
+3. Django then calls process_template_response() from all middlewares (in order).
+4. Inside process_template_response(), we can modify:
+    * response.context_data
+    * response.template_name
+    * Or return a totally different response.
+
+After all middleware hooks finish, Django automatically calls .render() on the TemplateResponse. The rendered
+response (HTML) is then sent to the client.
+
+# Suppose we have middleware configured like this in settings.py:
+MIDDLEWARE = [
+    'M1',
+    'M2',
+    'M3',
+]
+Each middleware defines a process_template_response() method. our view returns a TemplateResponse. Then
+process_template_response() is called in reverse order : M3 -> M2 -> M1
+At each step, the return value from process_template_response() is passed to the next middleware in reverse chain.
+If M3 returns a TemplateResponse, then M2 and M1 will also be called. But if M3 returns a normal HttpResponse, then
+M2 and M1's process_template_response() will not be called.

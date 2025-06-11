@@ -1,0 +1,108 @@
+Q : What is process_exception() in Django Middleware?
+-> process_exception(self, request, exception) is a middleware hook that is called only if an exception is raised
+during the view processing. This method:
+    * Takes the current request and the exception that was raised.
+    * Returns None if it does not handle the exception.
+    * Returns an HttpResponse if it does handle the exception.
+
+Q : When and How Django Calls process_exception() ?
+-> Django calls process_exception() only when a view (or something inside view processing) raises an unhandled
+exception. The goal is to give middleware a chance to handle or modify the exception.
+
+Step-1 : Middleware Initialization Phase
+self._exception_middleware = []
+if hasattr(mw_instance, "process_exception"):
+    self._exception_middleware.append(
+        self.adapt_method_mode(False, mw_instance.process_exception),
+    )
+
+When Django starts up and loads middleware (e.g., during app boot): It checks whether each middleware instance (mw_instance)
+defines a process_exception() method. If it does, Django stores that method in self._exception_middleware (a list of functions).
+It wraps the method using self.adapt_method_mode(False, ...), which ensures compatibility with sync/async behavior.
+
+Step-2 : Exception Occurs During View Processing
+try:
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+except Exception as e:
+    response = self.process_exception_by_middleware(e, request)
+    if response is None:
+        raise
+wrapped_callback() is the actual view function (possibly decorated). If it raises an exception, Django catches it.
+It then calls process_exception_by_middleware() to give middleware a chance to handle it.
+
+Step-3 : process_exception_by_middleware() Implementation
+def process_exception_by_middleware(self, exception, request):
+    for middleware_method in self._exception_middleware:
+        response = middleware_method(request, exception)
+        if response:
+            return response
+    return None
+
+Django loops through all registered process_exception() methods in reverse order of middleware (because of the
+way they're stacked). For each, it passes the request and the exception. If any middleware returns an HttpResponse,
+it short-circuits the loop and returns that response.
+
+-> Middleware can take control and return a meaningful error response (e.g., JSON error, custom 500 page). If none
+handle it, Django lets the exception propagate and uses default error handling.
+
+# Flow :
+    Client Request,
+       → Middleware1 (request)
+       → Middleware2 (request)
+       → Middleware3 (request)
+       → view() raises exception
+                      ↓
+       ← process_exception() (M3)
+       ← process_exception() (M2)
+       ← process_exception() (M1)
+       → Return HttpResponse (if one handles)
+
+Suppose i have middleware in settings.py,
+MIDDLEWARE = [
+    'M1',
+    'M2',
+    'M3',
+    'M4'
+]
+Finally we say when request come in django application, Middleware are called top-down during request processing:
+    M1 -> M2 -> M3 -> M4 -> view()
+If view raises an exception then Django calls process_exception() in reverse order (bottom-up):
+    M4.process_exception() -> M3.process_exception() -> M2.process_exception() -> M1.process_exception()
+As soon as one of the process_exception() methods returns a HttpResponse, Django stops and uses that response to
+return to the client.
+
+Suppose, M3's process_exception() returns an HttpResponse (handles the error). M2 and M1 are not called. Django uses
+the response from M3 and stops the chain.
+
+# Real-Life Example : Middleware to Handle Exceptions and Log Errors (in middleware.py)
+import logging
+from django.http import JsonResponse
+
+logger = logging.getLogger(__name__)
+
+class ExceptionLoggingMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_exception(self, request, exception):
+        # Log the exception with stack trace
+        logger.exception("Unhandled exception occurred")
+
+        # Return a JSON error response if it's an API request
+        if request.path.startswith('/api/'):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Something went wrong. Please try again later.'
+            }, status=500)
+
+        # Otherwise, return None and let Django handle it
+        return None
+
+-> Use Cases for process_exception()
+    * Logging unhandled exceptions with context.
+    * Returning friendly error responses for APIs or JSON endpoints.
+    * Custom rendering of error pages for specific types of errors.
+    * Sending alerts or analytics events when exceptions occur.

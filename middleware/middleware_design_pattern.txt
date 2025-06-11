@@ -1,0 +1,31 @@
+--> Django middleware primarily follows Chain of Responsibility Pattern
+
+# Chain of Responsibility Pattern : This pattern passes a request through a chain of handlers (middleware
+classes), each having a chance to process the request or pass it along.
+
+-> How It Works in Django:
+    1. Middleware components are chained together.
+    2. Each middleware can:
+         * Process the request before the view is called (process_request() or __call__)
+         * Process the response after the view is called (process_response())
+
+    Request --> Middleware 1 --> Middleware 2 --> View --> Middleware 2 --> Middleware 1 --> Response
+
+    3. Each middleware in the chain is responsible for:
+        * Modifying the request
+        * Allowing/denying access
+        * Modifying the response on the way back
+Example:
+    # settings.py
+    MIDDLEWARE = [
+        'myapp.middleware.MiddlewareOne',
+        'myapp.middleware.MiddlewareTwo',
+    ]
+These are executed in the order defined for requests, and in reverse for responses.
+
+--> Middleware can write in two way :
+    1. Class Base
+    2. Decorator Base
+
+Both are follow chain of responsibility pattern. function-based middleware (and class-based via __call__)
+internally applies the Decorator pattern by wrapping the get_response function to add behavior.

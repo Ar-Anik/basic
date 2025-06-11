@@ -1,0 +1,79 @@
+Q : What is process_view()?
+-> process_view(self, request, view_func, view_args, view_kwargs) is a special middleware hook. Called after
+URL resolution but before the actual view function runs. Purpose:
+    * Modify or inspect the request or view.
+    * Perform checks (e.g., permissions, authentication).
+    * Return an HttpResponse to short-circuit the request before view execution.
+
+
+Q : How is process_view() Different from __call__()?
+-> __call__() wraps the entire middleware chain and is called once per request. process_view() is called after
+the middleware chain is created and before the view. Each middleware’s process_view() is called in order,
+separate from their __call__().
+
+# Middleware Chain and process_view()
+-> Django middleware is structured as a chain of calls:
+    M1.__call__(M2.__call__(M3.__call__(_get_response)))
+The process_view() hook is not called inside each middleware’s __call__(). Instead, Django core calls all
+middleware process_view() methods sequentially before calling the view.
+
+
+Q : How Does Django Core Handle Calling process_view()?
+During Django server startup, all middleware are instantiated. Django collects references to all middleware
+process_view() methods and stores them in an internal list (self._view_middleware).
+When a request comes Django resolves the URL and finds the view function. Django loops over each stored
+process_view() method in order:
+# django/core/handlers/base.py
+def _get_response(self, request):
+    # STEP 1: Resolve URL to get view
+    resolver_match = resolver.resolve(request.path_info)
+    callback, callback_args, callback_kwargs = resolver_match
+
+    # STEP 2: Call process_view() on all middlewares
+    for middleware_method in self._view_middleware:
+        response = middleware_method(request, callback, callback_args, callback_kwargs)
+        if response:
+            return response  # Short-circuit if a middleware returns response
+
+    # STEP 3: If none returns all response, Django calls the actual view.
+    response = callback(request, *callback_args, **callback_kwargs)
+    ...
+    return response
+
+
+Q : Where is self._view_middleware populated?
+-> In the BaseHandler.load_middleware() method:
+
+# django/core/handlers/base.py
+def load_middleware(self):
+    self._view_middleware = []
+    for middleware_path in settings.MIDDLEWARE:
+        middleware = import_string(middleware_path)
+        mw_instance = middleware(self._get_response)
+        if hasattr(mw_instance, 'process_view'):
+            self._view_middleware.append(mw_instance.process_view)
+
+So, load_middleware function loops through all middleware classes. If the middleware defines process_view(),
+it stores the bound method in self._view_middleware.
+
+# Real-Life Example Use of process_view()
+Common use: Restrict access to some views based on permissions.
+Example: Middleware that checks if the view has an admin_only attribute and blocks non-admin users.
+If check fails, middleware returns HttpResponseForbidden, blocking the view. Otherwise, request proceeds normally.
+
+# Full Flow :
+MIDDLEWARE = [M1, M2, M3]
+
+→ Django loads:
+   self._view_middleware = [M1.process_view, M2.process_view, M3.process_view]
+
+→ When a request comes:
+   M1.__call__ → M2.__call__ → M3.__call__ → wrapped get_response
+
+→ Inside _get_response():
+   - resolve view_func
+   - call:
+       M1.process_view()
+       M2.process_view()
+       M3.process_view()
+   - then call view_func()

@@ -1,0 +1,71 @@
+Suppose our MIDDLEWARE setting is:
+MIDDLEWARE = [
+    'Middleware_1',
+    'Middleware_2',
+    'Middleware_3',
+]
+
+And Middleware Structure like :
+class MiddlewareX:
+    def __init__(self, get_response):
+        self.get_response = get_response
+        # Only runs once, when Django starts
+
+    def __call__(self, request):
+        # Runs once per request
+        return self.get_response(request)
+
+--> Middleware Chain Creation (on Django startup)
+Step-1: Start from the innermost, which is not actual view function:
+    get_response_4 = django.core.handlers.base.BaseHandler._get_response       #inside BaseHandler
+So, Django does NOT start with the actual view function. It starts with the internal method
+BaseHandler._get_response(request), which:
+    * Resolves the URL
+    * Finds the actual view function
+    * Runs the view
+    * Handles exceptions, etc.
+
+This _get_response method is what eventually calls the view, but it's more than just the view — it's a
+central handler that wraps the full view resolution process.
+
+Step-2: Now wrap it in Middleware_3:
+    get_response_3 = Middleware_3(get_response_4)
+
+This means:
+    * get_response_3 is now an instance of Middleware_3
+    * And calling get_response_3(request) will call Middleware_3.__call__(request), which calls the
+      get_response_4
+
+Step-3: Now wrap Middleware_3 with Middleware_2:
+    get_response_2 = Middleware_2(get_response_3)
+
+At this point:
+    * get_response_2 is an instance of Middleware_2
+    * Which wraps Middleware_3
+    * So calling get_response_2(request), triggers: M2.__call__() → M3.__call__() → _get_response()
+
+
+Step 4: Finally wrap with Middleware_1:
+    get_response_1 = Middleware_1(get_response_2)
+
+Now get_response is the final middleware chain, Calling get_response(request) will do:
+    M1.__call__() → M2.__call__() → M3.__call__() → _get_response()
+
+--> So in __init__() like :
+class M1:
+    def __init__(self, get_response):
+        print("M1.__init__", get_response)  # This is an instance of M2
+
+class M2:
+    def __init__(self, get_response):
+        print("M2.__init__", get_response)  # This is an instance of M3
+
+class M3:
+    def __init__(self, get_response):
+        print("M3.__init__", get_response)  # This is the view function
+
+--> Its like onion roll : M1.__init__(M2.__init__(M3.__init__(_get_response)))
+
+--> When a request comes in, Django just calls get_response_1(request) — and that call executes the
+whole middleware chain + view + reverse-response.
+

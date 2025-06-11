@@ -1,0 +1,24 @@
+Link : https://docs.djangoproject.com/en/5.2/topics/http/middleware/
+
+--> Middleware is a small piece of code that runs before or after a request is processed. It helps us add
+features like authentication, security checks, or modifying the request/response without changing our main
+views.
+
+--> Middleware is a framework of hooks into Django’s request/response processing. It’s a light, low-level
+“plugin” system for globally altering Django’s input or output.
+
+# Middleware Actually Does :
+1. One middleware should ideally do one specific job. For example: checking if the user is logged in, adding
+a custom header to the response, logging requests, etc.
+2. Middleware is NOT responsible for fetching data from the database or handling business logic. That’s usually
+done in views or models.
+
+# Middleware’s Role:
+    1. It processes the request before it reaches the view.
+    2. It processes the response after the view sends it.
+
+# Middleware is like a small salesman who gets the product from the wholesaler. He does not create the product
+himself. After receiving the product, he adds some labels (like a logo), packaging, or other extras to each
+product, and then sells it to the customer. This small salesman adds extra features before and after the product
+is delivered (like after sell Attaches a warranty card or return policy, company shopping bag etc).
+
