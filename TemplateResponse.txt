@@ -1,0 +1,66 @@
+Q : What is TemplateResponse ?
+-> TemplateResponse is a class in Django that combines a template with a context and produces a lazy HTTP response — meaning
+it does not render the template immediately, but delays it until explicitly told to render.
+
+-> render TemplateResponse : from django.template.response import TemplateResponse
+
+
+Q : Why is TemplateResponse used?
+1. Lazy rendering -- Template is not rendered until response.render() is called, giving middleware or other logic a chance to
+modify the context/template before it's final.
+
+2. Middleware modification -- Middleware like process_template_response() can intercept and change the template context or
+response logic before rendering.
+
+3. Better performance -- If rendering isn't needed (like in redirects or cached views), we avoid template rendering overhead.
+
+
+# Difference Between HttpResponse and TemplateResponse
+-------------------------------------------------------------------------------------------------------------------------
+Feature	               HttpResponse	                        TemplateResponse
+-------------------------------------------------------------------------------------------------------------------------
+Rendering	          | Already rendered content	        | Lazy: rendered later via .render()
+-------------------------------------------------------------------------------------------------------------------------
+Used For	          | Sending raw strings, JSON,          | Rendering templates with context
+                      | file data, etc.                     |
+-------------------------------------------------------------------------------------------------------------------------
+Modifiable Context	  | No context concept	                | Has context_data, which can be modified before rendering
+-------------------------------------------------------------------------------------------------------------------------
+Middleware Support	  | process_template_response()         | Triggers process_template_response() if returned by view
+                      | is not triggered                    |
+-------------------------------------------------------------------------------------------------------------------------
+Rendering time	      | Rendered immediately when created	| Rendered on render() call (usually by Django before sending
+                      |                                     | to client)
+-------------------------------------------------------------------------------------------------------------------------
+
+
+# Example-1:
+from django.template.response import TemplateResponse
+def view2(request):
+    context = {"name": "Alice"}
+    return TemplateResponse(request, 'hello.html', context)
+
+# Example-2:
+from django.template.response import TemplateResponse
+def hello_view(request):
+    context = {
+        "user": "Alice"
+    }
+    response = TemplateResponse(request, "hello.html", context)
+
+    # Optional: Manual render (use this only if needed)
+    # response.render()  # Forces rendering now
+
+    return response
+
+
+--> When we return a TemplateResponse from a view, Django automatically detects that the response is a subclass of
+TemplateResponse, and calls .render() before returning it to the client.
+
+    # Simplified pseudo-code from Django core
+    if hasattr(response, 'render') and callable(response.render):
+        response = response.render()
+
+So if we don’t manually call .render(), Django will do it for us at the end of the request-response cycle, just before
+sending the final response to the client.
+

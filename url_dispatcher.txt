@@ -1,0 +1,175 @@
+Q : What is the URL Dispatcher?
+-> The URL dispatcher is a core part of Django's request/response cycle. It maps URLs (entered by users) to Python view
+functions or classes that return responses. Suppose, It’s like a traffic controller:
+    If a user goes to /blog/5/, the dispatcher decides which view should handle it.
+
+# Django URL Dispatcher Internals
+Step-0: User sends an HTTP request
+    A user visits a URL, like:  http://127.0.0.1:8000/blog/post/42/
+
+Step-1: WSGI handler receives the request
+Django's request handling starts in: django.core.handlers.wsgi.WSGIHandler.__call__()
+    def __call__(self, environ, start_response):
+        request = self.request_class(environ)
+        response = self.get_response(request)
+
+STEP-2: get_response(request) is called
+Located in django.core.handlers.base.BaseHandler
+def get_response(self, request):
+    response = self._middleware_chain(request)  # calls _get_response or middleware-wrapped version
+
+This sets up and calls the middleware chain. The core of this chain is _get_response(request).
+    _middleware_chain → wraps _get_response with middleware (authentication, session, etc.)
+
+STEP-3: _get_response(request) is called
+Located in django.core.handlers.base.BaseHandler
+def _get_response(self, request):
+    resolver = get_resolver()
+    resolver_match = resolver.resolve(request.path_info)
+
+    callback = resolver_match.func
+    args = resolver_match.args
+    kwargs = resolver_match.kwargs
+
+    request.resolver_match = resolver_match
+
+    response = callback(request, *args, **kwargs)
+    return response
+
+STEP-4: get_resolver() loads our project’s root urls.py
+Located in: django.urls.base.get_resolver
+def get_resolver(urlconf=None):
+    if urlconf is None:
+        urlconf = settings.ROOT_URLCONF  # usually 'myproject.urls'
+    return URLResolver(RegexPattern('^/'), import_module(urlconf).urlpatterns)
+
+This creates a root URLResolver that wraps the top-level urlpatterns. URLResolver is an internal Django class that
+represents a collection of URL patterns, typically created when we use include() in urls.py
+
+Step-5: URLResolver.resolve(path) — Recursive Matching
+File: django.urls.resolvers
+def resolve(self, path):
+    path = path.rstrip('/') + '/'
+    for pattern in self.url_patterns:
+        try:
+            sub_match = pattern.resolve(path)
+        except Resolver404:
+            continue
+        else:
+            return sub_match
+    raise Resolver404(...)
+
+This loops over every pattern in urlpatterns. For each pattern:
+    * Calls .resolve(path) on the pattern
+    * Pattern can be a URLPattern or another URLResolver (from include())
+
+Step-7: include() and Nested URLResolvers
+When we do:
+    path('blog/', include('blog.urls'))
+
+Django creates a URLResolver that:
+    * Matches 'blog/'
+    * Removes 'blog/' from the URL path
+    * Delegates the rest of the path (e.g., 'post/42/') to blog.urls
+This is how recursive matching happens:
+    * /blog/post/42/
+    * Matches blog/ in root → resolves post/42/ in blog app
+
+Step-8 : Final URLPattern.resolve(path)
+After resolver = get_resolver(), then call resolver.resolve(request.path_info)
+-> File: django.urls.resolvers
+def resolve(self, path):
+    match = self.pattern.match(path)
+    if match:
+        new_path, args, kwargs = match
+        return ResolverMatch(
+            self.callback,
+            args,
+            kwargs,
+            route=str(self.pattern),
+            ...
+        )
+    raise Resolver404(...)
+
+Matches using a RegexPattern, if matched:
+    * Captures URL parameters
+    * Returns a ResolverMatch with:
+        * func: the view function
+        * args: positional args
+        * kwargs: keyword args
+
+Step-9. Back in _get_response(): View Is Called
+callback = resolver_match.func
+args = resolver_match.args
+kwargs = resolver_match.kwargs
+
+response = callback(request, *args, **kwargs)
+At this point, Django:
+    * Calls our view function or class-based view .as_view()
+    * Passes the request and URL parameters
+
+Step-10. View Returns HttpResponse
+return HttpResponse(...)
+or
+return render(request, "template.html", context)
+
+This response is passed back to Django.
+
+Step-11. Response Middleware Runs
+Middlewares like GZipMiddleware, ContentSecurityPolicyMiddleware, etc., are called. Can modify or replace the HttpResponse.
+
+Step-12. WSGIHandler Returns Response
+Back in:
+    def __call__(self, environ, start_response):
+        ...
+        start_response(status, headers)
+        return response
+The WSGI response is returned to the client (browser).
+
+
+# Full Request Flow Diagram
+    Client Request → GET /blog/post/42/
+      ↓
+    WSGI Server (uWSGI / Gunicorn / runserver)
+      ↓
+    wsgi.py → get_wsgi_application()
+      ↓
+    WSGIHandler.__call__()
+      ↓
+    HttpRequest created
+      ↓
+    get_response(request)
+      ↓
+    → _middleware_chain → _get_response(request)
+         ↓
+       get_resolver() → loads ROOT_URLCONF (urls.py)
+         ↓
+       root_resolver.resolve('/blog/post/42/')
+         ↓
+       match: path('blog/', include('blog.urls'))
+         ↓
+       new resolver.resolve('post/42/')
+         ↓
+       match: path('post/<int:id>/', ...)
+         ↓
+       return ResolverMatch(view=blog_post, kwargs={'id': 42})
+         ↓
+       call blog_post(request, id=42)
+         ↓
+       view returns HttpResponse
+         ↓
+       response middleware
+         ↓
+    WSGIHandler returns response to server
+         ↓
+    Server sends response to browser
+
+
+# Django's URL system is bidirectional.
+1. Forward resolution (URL path → view):
+Django takes a URL like /blog/post/42/ and resolves it to a view function. By : resolve(path)
+
+2. Reverse resolution (view name + args → URL):
+Django takes a view name like 'post-detail' and arguments like id=42, and builds the URL /blog/post/42/. By :
+    reverse(), {% url %}
+

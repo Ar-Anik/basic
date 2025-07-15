@@ -1,0 +1,14 @@
+[2025-07-12 10:00:01] INFO Starting the application
+[2025-07-12 10:00:05] DEBUG User login attempt: user_id=123
+[2025-07-12 10:00:06] INFO User logged in successfully: user_id=123
+[2025-07-12 10:01:10] WARNING Disk usage exceeds 80%
+[2025-07-12 10:01:15] ERROR Failed to save user settings: user_id=124
+[2025-07-12 10:02:30] INFO User logout: user_id=123
+[2025-07-12 10:03:00] DEBUG Heartbeat check successful
+[2025-07-12 10:03:30] ERROR Database connection lost
+[2025-07-12 10:04:01] INFO Reconnected to database
+[2025-07-12 10:05:00] ERROR Timeout while fetching user data
+[2025-07-12 10:06:00] INFO Daily report generated successfully
+[2025-07-12 10:07:00] DEBUG Cache cleared
+[2025-07-12 10:08:15] INFO Backup completed
+[2025-07-12 10:09:45] WARNING High memory usage detected

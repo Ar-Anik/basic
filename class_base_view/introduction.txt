@@ -1,0 +1,3 @@
+Introduction : https://docs.djangoproject.com/en/5.2/topics/class-based-views/intro/
+Generic CBV : https://docs.djangoproject.com/en/5.2/topics/class-based-views/generic-display/
+
