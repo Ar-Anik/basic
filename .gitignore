@@ -1,4 +1,4 @@
 # ==========================================
 # Ignore all test files starting with test
 # ==========================================
-text*.py
+test*.py
