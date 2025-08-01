@@ -1,0 +1,35 @@
+--> An interpreter is a program that:
+	* Reads our code (or compiled bytecode),
+	* Understands it
+	* And executes it line by line
+
+In Python the interpreter includes:
+	* A parser (to analyze source code),
+	* A compiler (to turn source code into bytecode),
+	* The PVM (which executes that bytecode).
+
+Q : What is Parsing?
+Parsing is the step where Python reads our code (the .py file) and breaks it down into a structured form that it
+can work with.
+	* It checks syntax: Are the statements valid Python?
+	* It builds an internal structure, often a syntax tree (AST – Abstract Syntax Tree).
+	* This structure is then used to generate bytecode.
+
+Q : What is Python Virtual Machine(PVM) ?
+--> The Python Virtual Machine (PVM) is the part of the Python runtime that executes our Python bytecode.  PVM is part of the Python interpreter.
+
+> Python Code Execution Process
+When we write and run a (.py) file, Python doesn’t execute our code directly. Instead, the steps are:
+
+Step-1 : Parsing and Compilation
+	* First Our (.py) source code is compiled into bytecode (a lower-level, platform-independent representation).
+	* This bytecode is saved in (.pyc) files (in the __pycache__ folder).
+
+Step-2 : Execution by the Python Virtual Machine
+	* The PVM reads the bytecode and executes it line by line.
+	* This is where our program "runs" — in the virtual machine.
+
+Q :  What is Bytecode?
+	* It's not machine code (like what a CPU executes).
+	* It's not human-readable like Python source code.
+	* It's a set of instructions that the PVM understands and interprets.
