@@ -1,0 +1,100 @@
+# Reference in orm_practice select_related apps
+
+# insert query
+dhaka = City.objects.create(name="Dhaka")
+chittagong = City.objects.create(name="Chittagong")
+rajshahi = City.objects.create(name="Rajshahi")
+khulna = City.objects.create(name="Khulna")
+
+anik = Person.objects.create(name="Anik", hometown=dhaka)
+mahmud = Person.objects.create(name="Mahmud", hometown=chittagong)
+sadia = Person.objects.create(name="Sadia", hometown=rajshahi)
+raihan = Person.objects.create(name="Raihan", hometown=khulna)
+tahsin = Person.objects.create(name="Tahsin", hometown=None)
+
+Book.objects.create(title="Python Mastery", author=anik)
+Book.objects.create(title="Django for Professionals", author=mahmud)
+Book.objects.create(title="Machine Learning Simplified", author=sadia)
+Book.objects.create(title="Advanced Algorithms", author=raihan)
+Book.objects.create(title="No Author Book", author=tahsin)
+
+# select_related('author__hometown')
+b = Book.objects.select_related("author__hometown").get(id=4)
+p = b.author      # No new query
+c = p.hometown    # No new query
+
+Q : Why use author__hometown(double underscore)?
+-> From the perspective of relationships:
+- Book → author → Person
+- Person → hometown → City
+So, Book has a direct relationship to Person and an indirect relationship to City through Person.
+
+select_related() takes the field name (the related model’s attribute name) to follow the relationship. For example :
+        Book.objects.select_related("author")
+This tells Django: “When fetching Book objects, also fetch the related Person (author) in the same query.”
+
+Here, "author__hometown" uses double underscores (__) — this is called relation traversal syntax in Django. It means:
+`Go through the author relationship in the Book model and then follow the hometown relationship inside the Person model.`
+
+So Django understands the path:
+- Book → author → hometown
+
+In simple terms:
+- author is a ForeignKey from Book → Person
+- hometown is a ForeignKey from Person → City
+
+Therefore, author__hometown means: “Fetch the City related to the author of this Book.”
+
+
+# query explanation
+1. Book.objects.select_related("author__hometown").get(id=4)
+-> Django constructs one single SQL query using JOINs:
+    - Book table is joined with the Person (author) table.
+    - Person table is joined with the City (hometown) table.
+
+The query might look like this:
+SELECT
+    book.id, book.title,
+    person.id, person.name,
+    city.id, city.name
+FROM book
+LEFT OUTER JOIN person ON (book.author_id = person.id)
+LEFT OUTER JOIN city ON (person.hometown_id = city.id)
+WHERE book.id = 4;
+
+
+The result includes Book, Person, and City data together. Django stores the related Person and City objects in memory
+immediately. This means those relationships are cached inside the Python objects.
+
+# p = b.author
+- Django does not hit the database again.
+- The related author object is already available because of the select_related() JOIN.
+
+# c = p.hometown
+- Django again does not hit the database.
+- The related hometown (City) object is already preloaded from the initial query.
+
+So, Total queries executed: 1
+All related objects (Book → Person → City) are loaded together in one SQL query.
+
+
+# without select_related('author__hometown')
+b = Book.objects.get(id=4)
+p = b.author
+c = p.hometown
+
+1. Django sends one query to fetch the Book object only.
+    SELECT * FROM book WHERE id = 4;
+
+2. p = b.author
+When the author attribute is accessed, Django realizes the related Person object is not loaded. It sends another
+query to fetch that person:
+    SELECT * FROM person WHERE id = 5;
+
+3. c = p.hometown
+Again, Django sees the hometown relationship is not yet loaded. It executes one more query:
+    SELECT * FROM city WHERE id = 1;
+
+
+So, Total queries executed: 3
+Each relationship causes a separate SQL query (this is called lazy loading).

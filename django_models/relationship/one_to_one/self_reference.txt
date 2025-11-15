@@ -1,0 +1,71 @@
+# self-reference
+A self-referential One-to-One relationship means a model’s OneToOneField points to the same model class instead of
+another model. This kind of relationship allows one instance of a model to be linked to exactly one other instance
+of the same model. In database terms, this creates a self-join where the foreign key refers back to the same table.
+
+-> Let’s consider an Employee model. Each employee can have one assistant and each assistant can assist one boss.
+So, the relationship is : Employee 1 <--> Employee 2
+and no one can assist multiple bosses at the same time. This scenario is naturally modeled using a self-referential
+OneToOneField.
+
+# Defining a Self-Referential OneToOneField
+from django.db import models
+
+class Employee(models.Model):
+    name = models.CharField(max_length=100)
+    assistant = models.OneToOneField(
+        'self',                     # Refers to the same model
+        on_delete=models.SET_NULL,  # If boss is deleted → assistant becomes NULL
+        null=True,
+        blank=True,
+        related_name='boss'         # Reverse relation name
+    )
+
+    def __str__(self):
+        return self.name
+
+Q : How Django Interprets This Internally
+-> When Django sees 'self' it:
+- Creates a foreign key column in the same table, referencing the model’s own id.
+- Enforces uniqueness, so only one link can exist per pair.
+- Adds a reverse relation automatically using the related_name parameter.
+
+Here:
+- The forward relation is .assistant
+- The reverse relation is .boss
+
+This means:
+- We can go from boss → assistant (forward).
+- We can also go from assistant → boss (reverse).
+
+
+# Data Insertion
+>>> from self_ref.models import Employee
+>>> boss = Employee.objects.create(name='Anik')
+>>> assistant = Employee.objects.create(name='Joy', assistant=boss)
+
+
+# Reverse Relation
+>>> assistant.assistant
+<Employee: Anik>
+>>> boss.boss
+<Employee: Joy>
+>>> assistent.employee_set
+
+
+# swapping relationships
+>>> oni = Employee.objects.create(name='Oni')
+>>> boss.assistant = oni
+>>> boss.save()
+
+
+# query
+>>> Employee.objects.filter(assistant__isnull=False)    # which have boss
+<QuerySet [<Employee: Joy>, <Employee: Anik>]>
+
+>>> Employee.objects.filter(boss__isnull=False)        # only boss
+<QuerySet [<Employee: Anik>, <Employee: Oni>]>
+
+# Delete operation
+>>> boss.delete()
+(1, {'self_ref.Employee': 1})

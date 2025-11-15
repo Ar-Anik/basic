@@ -1,0 +1,95 @@
+#> Note-1
+-> prefetch_related ব্যবহার করার সময় একটি পার্থক্য লক্ষ্য করা দরকার — একটি query থেকে তৈরি objects একাধিক related objects-এর মধ্যে
+share হতে পারে। অর্থাৎ return হওয়া objects গুলোর মধ্যে একই Python model instance একাধিক জায়গায় used হতে পারে.
+
+এটি সাধারণত foreign key relationships-এ ঘটে। সাধারণত এই আচরণ কোনো সমস্যা তৈরি করে না বরং এটি মেমরি ও CPU সময় বাঁচায়।
+
+# Example :
+from django.db import models
+
+class Author(models.Model):
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+
+
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+    author = models.ForeignKey(Author, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.title
+
+
+# ধরুন database এ আছে:
+# Author: Anik
+# Book: Python Basics (author=Anik)
+# Book: Advanced Django (author=Anik)
+
+from django.db.models import prefetch_related
+
+# Fetch all books with their related authors
+books = Book.objects.prefetch_related('author')
+
+for book in books:
+    print(f"{book.title} - {book.author.name} (author id in memory: {id(book.author)})")
+
+output like :
+Python Basics - Anik (author id in memory: 4412387120)
+Advanced Django - Anik (author id in memory: 4412387120)
+
+Both lines show the same author memory ID → 4412387120. which proves that both Book objects are sharing the same Python
+instance of Author (Anik).
+
+
+#> Note-2
+prefetch_related সাধারণভাবে ডাটাবেসে একটি SQL query তৈরি করে যেখানে IN অপারেটর ব্যবহার করা হয়। যখন একটি বড় QuerySet ব্যবহার করা হয়
+তখন Django এমন একটি বড় SQL query তৈরি করে যেখানে অনেকগুলো মান IN (...) close-এর মধ্যে বসানো হয়। Example :
+    SELECT * FROM toppings WHERE pizza_id IN (1, 2, 3, 4, 5, 6, ...);
+
+কিন্তু সমস্যা হলো — কিছু Database সিস্টেমে এই বড় IN close গুলো পারফরম্যান্সে প্রভাব ফেলতে পারে কারণ ডাটাবেসকে এই বিশাল IN তালিকাটি parse ও
+execute করতে হয়। তাই বলা হয় — নিজের ব্যবহারের ক্ষেত্র অনুযায়ী সবসময় performance Test করে দেখা উচিত।
+
+
+#> Note-3
+Q : Django ORM-এ .iterator() কাজ?
+-> Django যখন .all() বা .prefetch_related() চালায় তখন এটি পুরো QuerySet এর ফলাফল cache করে রাখে মেমরিতে। কিন্তু .iterator()
+ব্যবহার করলে Django cache না করে সরাসরি ডাটাবেস থেকে একে একে record read করে ।
+
+- Example:
+for book in Book.objects.iterator():
+    print(book.title)
+
+এতে Django প্রতিটি row একে একে ডাটাবেস থেকে নেয় cache করে না — এটি memory-efficient কিন্তু prefetch cache ব্যবহার করতে দেয় না (কারণ
+caching পুরোপুরি এড়িয়ে যায়)।
+
+যখন .prefetch_related() এর সাথে .iterator() ব্যবহার করা হয় তখনও Django দুটি আলাদা query চালায়:
+- প্রথমে Main Model-এর ডেটা fetch করে
+- তারপর related Model-এর ডেটা fetch করে (prefetch করার জন্য)
+
+কিন্তু .iterator() ডিফল্টভাবে Django-র prefetch মেকানিজমকে বাইপাস করে দেয় কারণ এটি “lazy” behaviour follow করে একে একে record
+read করে এবং `queryset caching এড়িয়ে চলে`। তাই prefetch কাজ করে না — Django prefetch query চালানোর সুযোগ পায় না।
+
+কিন্তু যদি .iterator() এর মধ্যে chunk_size use করা হয়.
+# without chunk_size show error
+>>> for book in Book.objects.prefetch_related('authors').iterator():
+...   print(book.title, [a.name for a in book.authors.all()])
+...
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/Users/aubdurrobanik/Desktop/test_project/orm_practice/orm_env/lib/python3.13/site-packages/django/db/models/query.py", line 518, in iterator
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: chunk_size must be provided when using QuerySet.iterator() after prefetch_related().
+
+# with chunk_size
+>>> books = Book.objects.prefetch_related('author').iterator(chunk_size=2)
+>>> for book in books:
+...     print(book.title, "-", book.author.name)
+...
+Python Mastery - Anik
+Django for Professionals - Mahmud
+Machine Learning Simplified - Sadia
+

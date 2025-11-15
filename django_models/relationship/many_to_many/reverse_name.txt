@@ -1,0 +1,60 @@
+Q: What is a Reverse Relationship?
+-> When a ManyToManyField is declared in one model, Django automatically creates a reverse relationship on the
+related model — even if the related model does not explicitly declare that relationship. It allows us to traverse
+the relationship in the opposite direction.
+
+# In simple terms:
+- The model that defines the ManyToManyField has the forward relationship.
+- The related model gets the reverse relationship automatically.
+
+# Example :
+from django.db import models
+
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(Person)
+
+
+Here,
+- Forward relationship, Group → Person by this relationship we can access `members` like group.members.all()
+- Reverse relationship, Person → Group by this relationship we can access `group_set` like person.group_set.all()
+
+Q : How Django Automatically Names the Reverse Relationship?
+-> If no custom name is provided, Django automatically generates the reverse accessor name following this rule:
+- <lowercase name of the model that has the ManyToManyField>_set
+
+# In the example above:
+- The field members is defined in Group.
+- Therefore, the reverse name on Person becomes group_set.
+
+So:
+group.members.all()    # All persons in the group
+person.group_set.all() # All groups where that person is a member
+
+
+# Customizing the Reverse Relationship with related_name
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(Person, related_name="groups")
+
+Now the reverse relationship becomes groups instead of group_set. so we can write :
+group.members.all()  # same as before
+person.groups.all()  # custom reverse name
+
+
+# Reverse Relationship in ORM
+Django automatically uses this reverse name in the ORM query API (.all(), .filter(), .add(), etc.)
+
+# Example ORM usage:
+# Forward query
+Group.objects.filter(members__name="John")
+
+# Reverse query (using related_name)
+Person.objects.filter(groups__name="Music Band")
+
+
+# If related_name was not defined, the reverse lookup would be:
+Person.objects.filter(group_set__name="Music Band")

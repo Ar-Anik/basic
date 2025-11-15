@@ -1,0 +1,48 @@
+Q : What is _state.adding?
+-> Every Django model instance has a hidden internal attribute called _state. This _state object keeps track of
+the instance’s current status — whether Django should treat it as:
+    - A new object that should be INSERTED into the database, or
+    - An existing object that should be UPDATED in the database.
+
+Inside _state, the most commonly used property is _state.adding. It is a boolean flag (True or False).
+
+# Meaning of _state.adding
+--------------------------------------------------------------------------------------------------------
+| Value   | Meaning                                                | Database Action                   |
+| ------- | ------------------------------------------------------ | --------------------------------- |
+| True    | Django treats this instance as a new object.           | Will perform an INSERT query.     |
+| False   | Django treats this instance as an existing object.     | Will perform an UPDATE query.     |
+--------------------------------------------------------------------------------------------------------
+
+# Example
+- Let’s say we have a model:
+class Blog(models.Model):
+    name = models.CharField(max_length=100)
+    tagline = models.TextField()
+
+- create a object
+blog = Blog(name="My Blog", tagline="Simple blog")
+blog.save()
+
+- After saving, Django automatically sets:
+blog._state.adding == False
+
+Because now this object exists in the database — it’s no longer new.
+
+
+# cloning or copying
+If we want to duplicate this object and save it as a new record (not an update), we must do two things:
+    - Set the primary key (pk) to None
+    - Set _state.adding to True
+
+blog.pk = None
+blog._state.adding = True
+blog.save()
+
+Now Django thinks, This is a new object — insert it into the table as a new row. So it runs an INSERT, not an UPDATE.
+
+Q : After pk = None, Why _state.adding is necessary?
+-> Even if we set pk=None, Django might still think it’s an update under certain complex inheritance or relation
+conditions. That’s why explicitly setting,
+    _state.adding = True
+ensures Django forces an INSERT, making the behavior consistent and predictable.

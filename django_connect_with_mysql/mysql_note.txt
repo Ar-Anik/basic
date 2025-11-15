@@ -1,0 +1,119 @@
+Link : https://docs.djangoproject.com/en/5.2/ref/databases/
+
+# MySQL ভার্সন সাপোর্ট
+Django MySQL 8.0.11 এবং তার পরের সংস্করণগুলোকে সাপোর্ট করে।
+
+inspectdb কমান্ড MySQL-এর information_schema ব্যবহার করে, যা আপনার সব স্কিমার তথ্য (tables, columns, constraints ইত্যাদি)
+ধারণ করে।
+
+Django ধরে নেয় যে আপনার ডাটাবেস UTF-8 (utf8mb4) সমর্থন করে এবং ট্রানজ্যাকশন ও রেফারেনশিয়াল ইন্টেগ্রিটি (Foreign Key সম্পর্ক)
+ডাটাবেসই হ্যান্ডেল করবে। তবে MyISAM ইঞ্জিন ব্যবহার করলে এই দুইটি (Transaction ও FK constraint) বাস্তবে কাজ করে না।
+
+# Storage Engine
+MySQL-এ একাধিক স্টোরেজ ইঞ্জিন আছে। সবচেয়ে গুরুত্বপূর্ণ দুটি হলো:
+1. InnoDB (ডিফল্ট এবং সুপারিশকৃত)
+- সম্পূর্ণ Transactional সাপোর্ট দেয়।
+- Foreign Key রেফারেন্স সাপোর্ট করে।
+- Django-র ORM এর সঙ্গে সবচেয়ে বেশি সামঞ্জস্যপূর্ণ।
+
+week-point : MySQL restart করলে AUTO_INCREMENT কাউন্টার হারিয়ে যায় এবং এটি পুনরায় max(id) + 1 হিসেবে তৈরি হয়, ফলে কিছু
+ক্ষেত্রে পুরনো ID পুনরায় ব্যবহৃত হতে পারে।
+
+2. MyISAM
+- Transactions সাপোর্ট করে না
+- Foreign Key constraint enforce করে না
+- সাধারণভাবে Django-র জন্য এটি ব্যবহার না করাই ভালো।
+
+# MySQL DB API Drivers
+Python থেকে MySQL ব্যবহারের জন্য Django Database API ড্রাইভার ব্যবহার করে।
+
+1. mysqlclient (সুপারিশকৃত)
+- এটি একটি native C driver।
+- Django 3.x এবং 4.x উভয়ের সঙ্গে ভালোভাবে কাজ করে।
+
+2. MySQL Connector/Python (Oracle দ্বারা তৈরি pure Python driver)
+- এটি MySQL client library ছাড়াই চলে।
+- Django adapter 1.1.x বা তার পরের সংস্করণে অন্তর্ভুক্ত থাকে, তবে Django-র সর্বশেষ সংস্করণের সাথে সবসময় আপডেট নাও থাকতে পারে।
+
+# Creating database
+CREATE DATABASE <dbname> CHARACTER SET utf8mb4;
+
+# Collation settings
+একটি কলামের collation নির্ধারণ করে —
+- ডেটা কীভাবে সাজানো (sorted) হবে, এবং
+- কোন দুটি string সমান (equal) হিসেবে গণ্য হবে।
+
+CharField এবং TextField-এর জন্য db_collation প্যারামিটার ব্যবহার করে একটি নির্দিষ্ট কলামের collation সেট করা যায়।
+
+তাছাড়া, atabase-wide level এবং প্রতিটি টেবিলের জন্য আলাদাভাবে collation নির্ধারণ করা যায়। এক্ষেত্রে সরাসরি ডাটাবেস সেটিংস বা টেবিল
+ম্যানুয়ালি পরিবর্তন করে collation নির্ধারণ করতে হবে, কারণ Django নিজে থেকে এগুলো পরিবর্তনের কোনো API প্রদান করে না।
+
+ডিফল্টভাবে, যখন ডাটাবেস UTF-8 ব্যবহার করে, তখন MySQL সাধারণত utf8mb4_0900_ai_ci collation ব্যবহার করে। এর ফলে, সব string
+comparison case-insensitive হয় — অর্থাৎ "Fred" এবং "freD" ডাটাবেস স্তরে সমান (equal) হিসেবে বিবেচিত হয়।
+
+তাই, যদি কোনো ফিল্ডে unique constraint থাকে, তাহলে একই কলামে "aa" এবং "AA" দুটো ভ্যালু ইনসার্ট করা illegal হবে, কারণ ডিফল্ট
+collation অনুযায়ী তারা সমান বলে ধরা হবে (এবং তাই non-unique)।
+
+যদি আপনি কোনো নির্দিষ্ট কলাম বা টেবিলে case-sensitive তুলনা চান, তাহলে সেই কলাম বা টেবিলের collation পরিবর্তন করে
+utf8mb4_0900_as_cs ব্যবহার করতে হবে।
+
+এছাড়াও MySQL Unicode Character Sets অনুযায়ী — utf8mb4_general_ci collation তুলনা দ্রুত (faster) করে, তবে এটি কিছু ক্ষেত্রে
+slightly less correct। অন্যদিকে, utf8mb4_unicode_ci collation comparison ধীরে করে, কিন্তু এটি more accurate.
+
+1. Field-level collation
+Location : models.py
+from django.db import models
+
+class Customer(models.Model):
+    # Case-insensitive collation (default)
+    name = models.CharField(max_length=100, db_collation='utf8mb4_0900_ai_ci')
+
+    # Case-sensitive collation
+    username = models.CharField(max_length=100, unique=True, db_collation='utf8mb4_0900_as_cs')
+
+    # More accurate (language-sensitive) collation
+    city = models.CharField(max_length=100, db_collation='utf8mb4_unicode_ci')
+
+    def __str__(self):
+        return self.name
+
+2. Table-level or database-level collation
+# Creating Database Table :
+CREATE DATABASE mydatabase
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+
+# Or after creation modify table :
+ALTER TABLE myapp_customer CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+# Then in Django’s settings:
+Location : settings.py
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'Data Base Name',
+        'USER': 'User Name',
+        'PASSWORD': 'Mysql Login Password',
+        'HOST': 'localhost',
+        'PORT': '3306',
+        # Collation is inherited from the database itself
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        },
+    }
+}
+
+Example Query:
+- In Django shell
+from myapp.models import Customer
+
+# Case-insensitive comparison (utf8mb4_0900_ai_ci)
+Customer.objects.create(name='Anik')
+print(Customer.objects.filter(name='anik').exists())
+# True — because ai_ci = case-insensitive
+
+# Case-sensitive comparison (utf8mb4_0900_as_cs)
+Customer.objects.create(username='Aubdur')
+print(Customer.objects.filter(username='aubdur').exists())
+# False — because as_cs = case-sensitive
+

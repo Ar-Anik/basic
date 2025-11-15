@@ -1,0 +1,104 @@
+# Reference orm_practice project select_related apps
+# Insert query for Restaurant Model
+
+>>> from prefetch_related.models import Topping, Pizza, Restaurant
+>>> from django.db import connection, reset_queries
+
+>>> t1 = Topping.objects.get(pk=1)
+>>> t2 = Topping.objects.get(pk=2)
+>>> t3 = Topping.objects.create(name="Pepperoni")
+>>> t4  = Topping.objects.get(pk=3)
+>>> t5 = Topping.objects.get(pk=4)
+
+>>> p1 = Pizza.objects.get(pk=1)
+>>> p2 = Pizza.objects.create(name="Pepperoni Feast")
+>>> p3 = Pizza.objects.get(pk=2)
+>>> p2.toppings.add(t1, t3)
+
+>>> r1 = Restaurant.objects.create(best_pizza=p1)
+>>> r2 = Restaurant.objects.create(best_pizza=p3)
+
+>>> r1.pizzas.add(p1, p2)
+>>> r2.pizzas.add(p2, p3)
+
+# Query-1
+>>> reset_queries()
+
+>>> Restaurant.objects.prefetch_related("pizzas__toppings")
+<QuerySet [<Restaurant: Restaurant object (1)>, <Restaurant: Restaurant object (2)>]>
+
+>>> for q in connection.queries:
+...   print(q['sql'])
+...
+SELECT prefetch_related_restaurant.id, prefetch_related_restaurant.best_pizza_id FROM prefetch_related_restaurant LIMIT 21
+SELECT (prefetch_related_restaurant_pizzas.restaurant_id) AS _prefetch_related_val_restaurant_id, prefetch_related_pizza.id, prefetch_related_pizza.name FROM prefetch_related_pizza INNER JOIN prefetch_related_restaurant_pizzas ON (prefetch_related_pizza.id = prefetch_related_restaurant_pizzas.pizza_id) WHERE prefetch_related_restaurant_pizzas.restaurant_id IN (1, 2)
+SELECT (prefetch_related_pizza_toppings.pizza_id) AS _prefetch_related_val_pizza_id, prefetch_related_topping.id, prefetch_related_topping.name FROM prefetch_related_topping INNER JOIN prefetch_related_pizza_toppings ON (prefetch_related_topping.id = prefetch_related_pizza_toppings.topping_id) WHERE prefetch_related_pizza_toppings.pizza_id IN (1, 2, 4)
+
+প্রতিটি Restaurant অবজেক্টের সঙ্গে তার pizzas (যে পিজাগুলো ওই রেস্টুরেন্টে আছে) গুলোকে fetch করবে, আর প্রতিটি Pizza-র জন্য আবার তার toppings
+(যে Topping গুলো সেই Pizza তে আছে) গুলোকেও fetch করবে.
+
+এতে করে Django মোট ৩টা ডাটাবেস কুয়েরি চালাবে —
+1. প্রথম কুয়েরি সব Restaurant আনতে
+2. দ্বিতীয় কুয়েরি সব Pizza আনতে (যেগুলো ওই Restaurant-গুলোর সঙ্গে যুক্ত)
+3. তৃতীয় কুয়েরি সব Topping আনতে (যেগুলো ওই Pizza-গুলোর সঙ্গে যুক্ত)
+
+
+# query-2
+>>> reset_queries()
+
+>>> Restaurant.objects.prefetch_related('best_pizza__toppings')
+<QuerySet [<Restaurant: Restaurant object (1)>, <Restaurant: Restaurant object (2)>]>
+
+>>> for q in connection.queries:
+...   print(q['sql'])
+... 
+SELECT prefetch_related_restaurant.id, prefetch_related_restaurant.best_pizza_id FROM prefetch_related_restaurant LIMIT 21
+SELECT prefetch_related_pizza.id, prefetch_related_pizza.name FROM prefetch_related_pizza WHERE (prefetch_related_pizza.id) IN ((1), (2))
+SELECT (prefetch_related_pizza_toppings.pizza_id) AS _prefetch_related_val_pizza_id, prefetch_related_topping.id, prefetch_related_topping.name FROM prefetch_related_topping INNER JOIN prefetch_related_pizza_toppings ON (prefetch_related_topping.id = prefetch_related_pizza_toppings.topping_id) WHERE prefetch_related_pizza_toppings.pizza_id IN (1, 2)
+
+প্রতিটি Restaurant অবজেক্টের জন্য তার best_pizza (যেটা ওই রেস্টুরেন্টের best_pizza হিসেবে সেট করা আছে) এবং সেই best_pizza-র সব
+toppings একসাথে নিয়ে আসবে। এই কাজটা সম্পূর্ণ করতে Django মোট ৩টা ডাটাবেস কুয়েরি চালায় —
+1. একবারে সব Restaurant আনার জন্য
+2. এরপর প্রতিটি রেস্টুরেন্টের best_pizza আনার জন্য
+3. তারপর সেই best_pizza-গুলোর সব toppings আনার জন্য।
+
+এখন যদি নিচের কুয়েরিটা ব্যবহার করা হয় —
+>> reset_queries()
+
+>>> Restaurant.objects.select_related('best_pizza').prefetch_related('best_pizza__toppings')
+<QuerySet [<Restaurant: Restaurant object (1)>, <Restaurant: Restaurant object (2)>]>
+
+>>> for q in connection.queries:
+...  print(q['sql'])
+... 
+SELECT prefetch_related_restaurant.id, prefetch_related_restaurant.best_pizza_id, prefetch_related_pizza.id, prefetch_related_pizza.name FROM prefetch_related_restaurant INNER JOIN prefetch_related_pizza ON (prefetch_related_restaurant.best_pizza_id = prefetch_related_pizza.id) LIMIT 21
+SELECT (prefetch_related_pizza_toppings.pizza_id) AS _prefetch_related_val_pizza_id, prefetch_related_topping.id, prefetch_related_topping.name FROM prefetch_related_topping INNER JOIN prefetch_related_pizza_toppings ON (prefetch_related_topping.id = prefetch_related_pizza_toppings.topping_id) WHERE prefetch_related_pizza_toppings.pizza_id IN (1, 2)
+
+তাহলে কুয়েরির সংখ্যা ৩ থেকে কমে ২টা হয়। এর কারণ হলো:
+select_related("best_pizza") অংশটা মূল কুয়েরির মধ্যেই JOIN ব্যবহার করে best_pizza নিয়ে আসে। তারপর
+prefetch_related("best_pizza__toppings") যখন চালানো হয়, Django বুঝতে পারে যে best_pizza আগেই এসেছে, তাই আর সেটা নতুন করে আনে
+না — শুধু toppings গুলো আলাদা কুয়েরিতে নিয়ে আসে। ফলে ডাটাবেসে অপ্রয়োজনীয় কুয়েরি হয় না এবং পুরো প্রক্রিয়াটা আরও দ্রুত হয়।
+
+
+-> prefetch_related() একাধিকবার ব্যবহার করলে, প্রতিবার নতুন lookup আগেরটার সঙ্গে যোগ হয় — অর্থাৎ যতবার কল করা হবে, Django তত বেশি
+related ডেটা একসাথে নিয়ে আসবে।
+
+যদি এই prefetch_related behavior বন্ধ করতে বা আগের সব lookup মুছে ফেলতে হয়, তাহলে None প্যারামিটার হিসেবে দিতে হয়। Example :
+    non_prefetched = qs.prefetch_related(None)
+এর মানে হলো — এই QuerySet আর কোনো prefetch_related query ব্যবহার করবে না। অর্থাৎ Django আর কোনো অতিরিক্ত related ডেটা load
+করবে না, শুধু Main টেবিলের Data আনবে।
+
+
+-> prefetch_related ব্যবহার করার সময় একটা বিষয় খেয়াল রাখা দরকার —
+কখনও কখনও একই অবজেক্ট একাধিক জায়গায় একইসাথে ব্যবহৃত হতে পারে।
+মানে, Django যখন ডেটা নেয়, তখন একই Python model instance (অর্থাৎ একই অবজেক্ট) একাধিক স্থানে দেখা যেতে পারে যেগুলো একে অপরের সঙ্গে সম্পর্কিত।
+
+এই ঘটনাটা সাধারণত ForeignKey সম্পর্ক থাকলে ঘটে।
+
+তবে এটা কোনো ভুল নয় — বরং এতে মেমরি কম লাগে এবং প্রসেসিং সময়ও কমে যায়, কারণ Django একবার তৈরি করা অবজেক্টকে পুনরায় ব্যবহার করে, নতুন করে তৈরি করে না।prefetch_related ব্যবহার করার সময় একটা বিষয় খেয়াল রাখা দরকার —
+কখনও কখনও একই ডাটাবেস অবজেক্ট একাধিক জায়গায় একইসাথে ব্যবহৃত হতে পারে।
+মানে, Django যখন ডেটা নেয়, তখন একই Python model instance (অর্থাৎ একই অবজেক্ট) একাধিক স্থানে দেখা যেতে পারে যেগুলো একে অপরের সঙ্গে সম্পর্কিত।
+
+এই ঘটনাটা সাধারণত ForeignKey সম্পর্ক থাকলে ঘটে।
+
+তবে এটা কোনো ভুল নয় — বরং এতে মেমরি কম লাগে এবং প্রসেসিং সময়ও কমে যায়, কারণ Django একবার তৈরি করা অবজেক্টকে পুনরায় ব্যবহার করে, নতুন করে তৈরি করে না।

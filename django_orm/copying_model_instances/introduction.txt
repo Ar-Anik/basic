@@ -1,0 +1,62 @@
+# Reference blog apps model in orm practice projects
+
+Django তে কোনো মডেল ইনস্ট্যান্স কপি করার জন্য সরাসরি কোনো built-in মেথড নেই, কিন্তু চাইলে সহজভাবেই একটি নতুন ইনস্ট্যান্স তৈরি করা যায়, যার
+ভেতরে আগের ইনস্ট্যান্সের সব ফিল্ডের মান থাকবে।
+
+# Case-1
+যদি মডেলটি কোনো ইনহেরিটেন্স ছাড়া সাধারণ একটি মডেল হয়, তাহলে কপি করা খুব সহজ। Example :
+
+- models.py
+class Blog(models.Model):
+    name = models.CharField(max_length=100)
+    tagline = models.TextField()
+
+blog = Blog(name="My blog", tagline="Blogging is easy")
+blog.save()  # blog.pk == 1
+
+এখন এই blog ইনস্ট্যান্সটিকে কপি করে একটি নতুন ইনস্ট্যান্স তৈরি করতে চাইলে, কেবলমাত্র pk (অর্থাৎ primary key) কে None করতে হবে এবং _state.adding
+কে True করতে হবে। এতে Django বুঝবে এটি একটি নতুন অবজেক্ট, পুরোনোটির আপডেট নয়।
+blog.pk = None
+blog._state.adding = True
+blog.save()  # blog.pk == 2
+
+এখন নতুন Blog অবজেক্টটি ডাটাবেজে নতুন রেকর্ড হিসেবে সংরক্ষিত হলো, আগেরটার কপি হিসেবে।
+
+# Case-2
+যখন মডেলে Inheritance (subclass) ব্যবহৃত হয়, তখন কিছুটা Complexity দেখা দেয়।
+class ThemeBlog(Blog):
+    theme = models.CharField(max_length=100)
+
+>>> from blog.models import ThemeBlog
+>>> django_blog = ThemeBlog(name='Django', tagline='Django is easy', theme='python')
+>>> django_blog.save()
+
+>>> django_blog.__dict__
+{'_state': <django.db.models.base.ModelState object at 0x10357fcb0>, 'id': 9, 'name': 'Django', 'tagline': 'Django is easy', 'blog_ptr_id': 9, 'theme': 'python'}
+>>> django_blog.pk = None
+>>> django_blog.__dict__
+{'_state': <django.db.models.base.ModelState object at 0x10357fcb0>, 'id': 9, 'name': 'Django', 'tagline': 'Django is easy', 'blog_ptr_id': None, 'theme': 'python'}
+
+- এখন এই django_blog ইনস্ট্যান্সটিকে কপি করতে হলে, শুধু pk নয়, id ফিল্ডকেও None করতে হবে, কারণ ইনহেরিটেড মডেলে id এবং pk উভয়ই আলাদা
+স্তরে সংরক্ষিত হয়। একইভাবে _state.adding = True করতে হবে:
+>>> django_blog.id = None
+>>> django_blog.__dict__
+{'_state': <django.db.models.base.ModelState object at 0x10357fcb0>, 'id': None, 'name': 'Django', 'tagline': 'Django is easy', 'blog_ptr_id': None, 'theme': 'python'}
+
+>>> django_blog._state.adding = True
+>>> django_blog.save()
+এখন নতুন একটি ThemeBlog ইনস্ট্যান্স তৈরি হলো, আগেরটার সম্পূর্ণ কপি হিসেবে।
+
+- এই পদ্ধতি শুধুমাত্র মডেলের নিজস্ব টেবিলের ডেটা কপি করে।
+
+# Case-3
+যদি মডেলের সঙ্গে কোনো ManyToManyField relation থাকে, তাহলে সেই সম্পর্কের এর জন্য যে আলাদা table আছে তার ডেটা স্বয়ংক্রিয়ভাবে কপি হবে না।
+Example : Entry মডেলের সঙ্গে Author মডেলের ManyToMany সম্পর্ক আছে:
+>>> entry = Entry.objects.all()[0]
+>>> old_authors = entry.authors.all()
+>>> entry.pk = None
+>>> entry._state.adding = True
+>>> entry.save()
+>>> entry.authors.set(old_authors)
+
+এখানে প্রথমে আগের entry-র authors এর লিস্ট রাখা হয়েছে, তারপর নতুন entry সেভ করার পর সেই authors দের relation আবার সেট করা হয়েছে।

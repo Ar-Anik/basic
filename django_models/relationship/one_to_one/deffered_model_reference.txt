@@ -1,0 +1,67 @@
+-> When a model field needs to reference a model class that is not yet defined at the time Python executes
+the module, we pass the related model as a string. This string can be:
+    - 'self' — reference the same model (self-referential).
+    - 'ModelName' — reference a model in the same app (only works if Django can resolve it).
+    - 'app_label.ModelName' — reference a model in another app (fully qualified).
+
+Django defers resolution of the string until all models are loaded (app registry ready). This avoids circular
+imports and allows models to refer to classes defined later or in other apps.
+
+
+# in accounts apps
+location : accounts/models.py
+from django.db import models
+from django.conf import settings
+
+# Link to the user model using the recommended string
+# (works with custom user models via settings.AUTH_USER_MODEL)
+class Profile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,   # recommended string (or variable)
+        on_delete=models.CASCADE,
+        related_name='profile'
+    )
+    bio = models.TextField(blank=True)
+
+    # Link to Student in another app using 'school.Student'
+    # we use string 'school.Student' to avoid importing school.models here
+    student = models.OneToOneField(
+        'school.Student',           # <-- deferred cross-app reference
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='profile'
+    )
+
+    def __str__(self):
+        return f'Profile of {self.user}'
+
+
+# in school apps
+# school/models.py
+from django.db import models
+
+class Student(models.Model):
+    name = models.CharField(max_length=120)
+    roll = models.IntegerField(unique=True)
+
+    def __str__(self):
+        return f'{self.name} ({self.roll})'
+
+# Data Entry
+>>> from django.contrib.auth import get_user_model
+>>> from accounts.models import Profile
+>>> from school.models import Student
+
+>>> User = get_user_model()
+>>> u = User.objects.create_user(username='anik', password='su')
+>>> s = Student.objects.create(name='Anik Student', roll=101)
+>>> p = Profile.objects.create(user=u, bio='Medium', student=s)
+
+>>> p.student
+<Student: Anik Student -> 101>
+>>> u.profile
+<Profile: Profile of anik>
+>>> s.profile
+<Profile: Profile of anik>
+

@@ -1,0 +1,146 @@
+-> Normally, when filtering or updating data, Django ORM compares a model field to a constant value
+(e.g. Entry.objects.filter(rating__gt=5)). But sometimes we need to compare one field to another field of the same
+model or even across relationships. To do that, Django provides F() expressions.
+
+Q : What is an F() expression?
+-> F() objects represent the value of a model field directly in the database, without pulling data into Python first.
+Django uses these objects to refer to model fields in queries or updates. This allows us to compare, calculate or
+update fields using other fields’ values — all handled inside the database (not in Python memory).
+
+# Import : from django.db.models import F
+
+# Find all Entry objects where number_of_comments is greater than number_of_pingbacks :
+Entry.objects.filter(number_of_comments__gt=F("number_of_pingbacks"))
+
+- Django translates this to an SQL query like:
+SELECT * FROM entry WHERE number_of_comments > number_of_pingbacks;
+
+
+-> Using Arithmetic Operations
+F() objects support arithmetic operations such as +, −, ×, ÷, %, and power (**).
+
+Example-1: Multiplication
+- Find entries with more than twice as many comments as pingbacks:
+Entry.objects.filter(number_of_comments__gt=F("number_of_pingbacks") * 2)
+
+Example-2: Addition
+- Find entries where the rating is less than the sum of comments and pingbacks:
+Entry.objects.filter(rating__lt=F("number_of_comments") + F("number_of_pingbacks"))
+
+
+-> Spanning Relationships with Double Underscore
+We can use double underscore (__) to access related model fields in an F() expression.
+
+Example-1:
+- Find all entries where the author’s name is the same as the blog’s name:
+Entry.objects.filter(authors__name=F("blog__name"))
+
+Here,
+- authors__name → Field from the related Author model.
+- blog__name → Field from the related Blog model.
+- Django automatically performs the required JOINs.
+
+
+-> Using F() with Date and Time
+F() can also be combined with datetime.timedelta for date arithmetic.
+
+Example-1:
+- Find all entries modified more than 3 days after publication:
+from datetime import timedelta
+Entry.objects.filter(mod_date__gt=F("pub_date") + timedelta(days=3))
+
+
+-> Bitwise Operations with F()
+F() supports bitwise operations for integer fields:
+
+| Operation   | Method             | Example                           |
+| ----------- | ------------------ | --------------------------------- |
+| AND         | .bitand()          | F("somefield").bitand(16)         |
+| OR          | .bitor()           | F("somefield").bitor(8)           |
+| XOR         | .bitxor()          | F("somefield").bitxor(4)          |
+| Right Shift | .bitrightshift()   | F("somefield").bitrightshift(2)   |
+| Left Shift  | .bitleftshift()    | F("somefield").bitleftshift(1)    |
+------------------------------------------------------------------------
+
+
+# bitand()
+Entry.objects.filter(flags=F("flags").bitand(16))
+
+# bitor()
+Entry.objects.update(flags=F("flags").bitor(8))
+
+
+-> F() in Update Queries
+F() can also be used to update fields relative to their current value.
+
+Example-1: Increment a field
+Entry.objects.update(number_of_comments=F("number_of_comments") + 1)
+
+- This increases all entries’ number_of_comments by 1 — efficiently handled by the database.
+
+Example-2: Multiple field dependency
+Entry.objects.update(rating=F("number_of_comments") + F("number_of_pingbacks"))
+
+- This sets rating as the sum of comments and pingbacks.
+
+
+-> Complex arithmetic
+Set rating = (likes + comments) ÷ 2:
+
+from django.db.models import F, ExpressionWrapper, FloatField
+
+Entry.objects.update(
+    rating=ExpressionWrapper(
+        (F("likes") + F("number_of_comments")) / 2,
+        output_field=FloatField()
+    )
+)
+
+
+Q : What problem F() solves?
+-> Normally, when we update or compare field values, we often do this in Python:
+entry = Entry.objects.get(id=1)
+entry.views = entry.views + 1
+entry.save()
+
+Above looks simple, but Django performs two database operations:
+1. Fetch the row from the database
+2. Update it with the new value
+If multiple users do this at the same time, it can cause a race condition — meaning one user’s update may overwrite
+another’s, because both read the old value before writing.
+
+-> Solution : Using F() expressions, we can perform the entire calculation directly in the database — without bringing
+data into Python memory.
+
+from django.db.models import F
+Entry.objects.filter(id=1).update(views=F("views") + 1)
+
+This is atomic, meaning the update happens in one SQL statement:
+    UPDATE entry SET views = views + 1 WHERE id = 1;
+No fetching or re-saving in Python — the database handles everything safely.
+
+Again, When we write:
+Entry.objects.update(rating=F("number_of_comments") + F("number_of_pingbacks"))
+
+Django translates it to SQL like:
+    UPDATE entry SET rating = number_of_comments + number_of_pingbacks;
+All arithmetic happens inside the database, not in Python.
+
+
+# Example-4
+>>> Entry.objects.filter(pub_date__year=F("mod_date__year"))
+<QuerySet [<Entry: Top 10 Pasta Recipes>, <Entry: Wanderlust Travel Guide>]>
+
+# Example-5
+>>> Entry.objects.aggregate(first_published_year=Min('pub_date__year'))
+{'first_published_year': 2023}
+
+# Example-6
+>>> sub_qry = Entry.objects.filter(pub_date__year=OuterRef('pub_date__year')).order_by('-rating').values('rating')[:1]
+>>> entires = Entry.objects.values('pub_date__year').annotate(top_rating=Subquery(sub_qry), total_comments=Sum('number_of_comments'))
+
+>>> for e in entires:
+...     print(e.get('pub_date__year'), '--', e.get('top_rating'), '--', e.get('total_comments'))
+
+2025 -- 30 -- 41
+

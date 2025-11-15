@@ -1,0 +1,78 @@
+Q : QuerySet Caching কী?
+-> Django-তে QuerySet মূলত ডাটাবেজ থেকে তথ্য আনার জন্য ব্যবহৃত হয়। যখন আপনি Entry.objects.all() এর মতো কিছু লেখেন, Django সাথে সাথে
+ডাটাবেজে কোনো query চালায় না — এটি শুধু query তৈরির প্রস্তুতি নেয়। এই QuerySet-এর ভিতরে একটি cache (অস্থায়ী মেমরি) থাকে যেখানে query-এর
+ফলাফল সংরক্ষণ করা হয়, যাতে একই query বারবার ডাটাবেজে না গিয়ে দ্রুত রেজাল্ট দিতে পারে।
+
+Q : QuerySet কখন ডাটাবেজে query চালায়?
+-> QuerySet তখনই ডাটাবেজে query চালায়, যখন এটি evaluate (মূল্যায়ন) করা হয়। অর্থাৎ যখন Django কে ডাটা আনতে হয়, তখন query execute
+হয়। উদাহরণস্বরূপ, নিচের কাজগুলো করলে QuerySet evaluate হয় :
+- list(queryset)
+- [obj for obj in queryset]
+- for obj in queryset:
+- bool(queryset)
+- entry in queryset
+- .first(), .last(), .exists(), .count() ইত্যাদি
+
+Q : Cache কীভাবে কাজ করে?
+Step-1 : নতুন QuerySet তৈরি
+    queryset = Entry.objects.all()
+এই সময় cache খালি থাকে। Django এখনো কোনো SQL query চালায়নি।
+
+Step-2 : প্রথমবার evaluate করা
+    print([e.headline for e in queryset])
+এখানে QuerySet প্রথমবার evaluate হলো। ফলে Django ডাটাবেজে query চালিয়ে সব Entry টেবিলের রেকর্ড এনে cache-এ সংরক্ষণ করল।
+
+Step-3 : পরবর্তীতে পুনরায় ব্যবহার
+    print([e.pub_date for e in queryset])
+এখন Django নতুন করে query চালাবে না, কারণ আগের cache-এ সব রেকর্ড আছে। এটি cache থেকে ডাটা নিয়ে আসবে — অর্থাৎ ডাটাবেজে আর কোনো
+hit হবে না।
+
+
+# Wrong Use (Cache reuse না করা)
+যদি নিচের মতো আলাদা আলাদা QuerySet তৈরি করেন, Django প্রত্যেকবার নতুন query চালাবে:
+    1. print([e.headline for e in Entry.objects.all()])
+    2. print([e.pub_date for e in Entry.objects.all()])
+এখানে Entry.objects.all() দু'বার লেখা হয়েছে, তাই Django দুটি আলাদা QuerySet তৈরি করবে — ফলে দুটি আলাদা SQL query চালানো হবে (ডাটাবেজে দুবার hit হবে)।
+
+Q : Why the second query does not reuse the cache, even though both use .all()?
+Step-1: Confirm what Entry.objects.all() actually returns
+When we call : Entry.objects.all()
+Django returns a new QuerySet object every time we call it. That QuerySet object has an internal cache mechanism built
+into it — meaning it can store results after it is evaluated. But Every new QuerySet call creates a new instance, with
+its own empty cache.
+
+Step-2: What happens in this code
+Line-1 : print([e.headline for e in Entry.objects.all()])
+Line-2 : print([e.pub_date for e in Entry.objects.all()])
+
+# Line 1: Entry.objects.all()
+Django calls the manager (objects) and builds a new QuerySet object. This QuerySet has an empty cache. When we iterate
+over it ([e.headline for e in queryset]), Django executes the SQL query, fetches all the rows, stores them in this
+QuerySet’s cache, and returns the headline list.
+
+Cache is filled — but only inside this QuerySet instance
+
+# Line 2: Entry.objects.all() again
+Now Django runs Entry.objects.all() again — which means, It creates another brand-new QuerySet object (a new Python
+object in memory). This new QuerySet has its own fresh empty cache. So, when we iterate over it ([e.pub_date for e in
+queryset]), Django again executes a new SQL query, because this is not the same object as before. There is no link
+between the first QuerySet and the second one. The cache is per-instance, not global per model.
+
+
+# Cache Reuse
+queryset = Entry.objects.all()
+print([e.headline for e in queryset])       # প্রথমবার evaluate, ডাটাবেজে query হবে
+print([e.pub_date for e in queryset])       # দ্বিতীয়বার cache থেকে ডাটা আসবে
+
+এখানে Django একবারই query চালাবে এবং দ্বিতীয়বার cache ব্যবহার করবে।
+
+
+Q : কখন QuerySet Cache করে না?
+-> সবসময় cache তৈরি হয় না। কিছু ক্ষেত্রে cache populate হয় না, বিশেষ করে যখন আপনি QuerySet থেকে শুধু একটি অংশ (slice বা index) নেন।
+
+queryset = Entry.objects.all()
+print(queryset[5])      # ডাটাবেজে query হবে
+print(queryset[5])      # আবার ডাটাবেজে query হবে
+
+এখানে cache ব্যবহার হবে না, কারণ আপনি শুধু একটি নির্দিষ্ট index (৫ নম্বর item) চাইছেন। QuerySet এখনো পুরোপুরি evaluate হয়নি, তাই Django
+প্রতিবার ডাটাবেজে query চালাবে।

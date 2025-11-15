@@ -1,0 +1,16 @@
+>>> Entry.objects.values('number_of_comments')
+
+# Result :
+<QuerySet [{'number_of_comments': 15}, {'number_of_comments': 3}, {'number_of_comments': 3}, {'number_of_comments': 20}]>
+
+# Equivalent Mysql:
+SELECT number_of_comments FROM f_exp_entry;
+
+>>> Entry.objects.values('pub_date__year')
+
+# Result :
+<QuerySet [{'pub_date__year': 2025}, {'pub_date__year': 2025}, {'pub_date__year': 2025}, {'pub_date__year': 2025}]>
+
+# Equivalent Mysql :
+SELECT YEAR(f_exp_entry.pub_date) AS pub_date__year FROM f_exp_entry;
+

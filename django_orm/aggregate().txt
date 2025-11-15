@@ -1,0 +1,67 @@
+-> The .aggregate() method performs a calculation across all rows in the QuerySet and returns a dictionary with the result.
+Each key in the dictionary is either automatically generated or explicitly named by us.
+
+# Common Aggregate Functions
+---------------------------------------------------------
+| Function  | Description                               |
+| --------- | ----------------------------------------- |
+| Avg()     | Calculates the average value              |
+| Sum()     | Calculates the total sum                  |
+| Min()     | Returns the smallest value                |
+| Max()     | Returns the largest value                 |
+| Count()   | Returns the total number of rows or items |
+---------------------------------------------------------
+
+#  We import them like this: from django.db.models import Avg, Sum, Min, Max, Count
+
+# Example 1: Get the total number of comments across all entries
+>>> Entry.objects.aggregate(Sum('number_of_comments'))
+Output : {'number_of_comments__sum': 46}
+
+>>> Entry.objects.aggregate(total_comments=Sum('number_of_comments'))
+Output : {'total_comments': 46}
+
+# Example 2: Find the average rating of all entries
+>>> Entry.objects.aggregate(average_rating=Avg('rating'))
+{'average_rating': 18.0}
+
+>>> Entry.objects.aggregate(Avg('rating'))
+{'rating__avg': 18.0}
+
+# Example 3: Find the highest rating (maximum)
+>>> Entry.objects.aggregate(Max('rating'))
+{'rating__max': 30}
+
+>>> Entry.objects.aggregate(max_rating=Max('rating'))
+{'max_rating': 30}
+
+# Example 4: Find the lowest number of pingbacks
+>>> Entry.objects.aggregate(Min('number_of_pingbacks'))
+{'number_of_pingbacks__min': 5}
+
+>>> Entry.objects.aggregate(min_pingbacks=Min('number_of_pingbacks'))
+{'min_pingbacks': 5}
+
+# Example 5: Count how many entries exist
+>>> Entry.objects.aggregate(total_entries=Count('id'))
+{'total_entries': 4}
+
+# Example 6: Combine multiple aggregations
+>>> Entry.objects.aggregate(
+...  total_comments=Sum('number_of_comments'),
+...  average_rating=Avg('rating'),
+...  max_pingbacks=Max('number_of_pingbacks')
+... )
+{'total_comments': 46, 'average_rating': 18.0, 'max_pingbacks': 10}
+
+# Example 7: Using double underscore to extract date part
+>>> Entry.objects.aggregate(first_published_year=Min('pub_date__year'))
+{'first_published_year': 2025}
+
+# Example 8: Aggregate with filtering
+>>> Entry.objects.filter(rating__gt=5).aggregate(total_comments=Sum("number_of_comments"))
+{'total_comments': 35}
+
+# Example 9: Aggregate from related model
+>>> blog.entries.aggregate(total_comments=Sum('number_of_comments'))
+{'total_comments': 35}

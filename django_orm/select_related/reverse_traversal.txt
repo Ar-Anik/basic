@@ -1,0 +1,50 @@
+# Reference orm_practice project, select_related apps
+
+-> Normally, select_related() is used to follow forward relationships. But Django also allows reverse traversal
+through a OneToOneField — meaning, it can follow the link backward from the related model.
+
+However this works only for OneToOneField, not ForeignKey because a OneToOne relation guarantees that there’s exactly
+one related object in both directions.
+
+To refer to that reverse relationship, the related_name (or default name if not specified) must be used.
+
+# Example Model
+from django.db import models
+
+class User(models.Model):
+    username = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.username
+
+class Profile(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='profile'  # <── reverse name to access Profile from User
+    )
+    bio = models.TextField()
+    location = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"Profile of {self.user.username}"
+
+# Forward direction (Profile → User)
+    profile = Profile.objects.select_related("user").get(id=1)
+This performs one SQL query using a JOIN to get both Profile and User.
+
+
+# Reverse direction (User → Profile)
+Now, going backward from User to Profile. Each User has one related Profile, but the User model does not have a direct field pointing to it.
+Instead, the relation can be accessed through the reverse name (related_name). Example :
+    user = User.objects.select_related("profile").get(id=1)
+
+Django understands that profile is a reverse OneToOne relation
+and automatically performs a SQL JOIN from User → Profile. Django generates an SQL query similar to:
+SELECT
+    user.id, user.username,
+    profile.id, profile.user_id, profile.bio, profile.location
+FROM user
+LEFT OUTER JOIN profile ON (profile.user_id = user.id)
+WHERE user.id = 1;
+

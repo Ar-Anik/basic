@@ -1,0 +1,20 @@
+# Referece copying apps models.py
+
+Let’s say we have two models — Entry and EntryDetail. In EntryDetail entry field is OneToOne relatioal Field.
+
+# Data Entry
+>>> entry1 = Entry.objects.create(title='Django ORM', content='Learn Django ORM step by step')
+>>> detail1 = EntryDetail.objects.create(entry=entry1, view_count=500, rating=4.5)
+
+# Copy entry1
+>>> entry1.pk = None
+>>> entry1._state.adding = True
+>>> entry1.save()
+
+entry1 copy করলেও EntryDetail Table এ কোন data পড়বে না. যদি details এর data copy করতে চাই তাহলে :
+>>> detail1.pk = None
+>>> detail1._state.adding = True
+>>> detail1.__dict__
+{'_state': <django.db.models.base.ModelState object at 0x103346ea0>, 'id': None, 'entry_id': 2, 'view_count': 500, 'rating': 4.5}
+>>> detail1.entry = entry1      # avoid violating the one-to-one unique constraint
+>>> detail1.save()

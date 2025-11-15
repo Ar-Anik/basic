@@ -1,0 +1,41 @@
+-> has_key হল Django ORM-এর একটি JSONField lookup type, যা ব্যবহার করা হয় JSON ডেটার top-level-এ কোনো নির্দিষ্ট key আছে
+কিনা তা যাচাই করার জন্য। এটি key-এর উপস্থিতি check করে, value নয়। has_key শুধুমাত্র JSONField (বা ডাটাবেসে JSON টাইপের কলাম)
+এর উপর কাজ করে।
+
+# Example
+>>> from json_app.models import Dogi
+
+-- object create
+>>> Dogi.objects.create(name='hasina', data={'breed': 'bal', 'owner': 'bangladesh'})
+>>> Dogi.objects.create(name='khaleda', data={'breed': 'bnp', 'owner': 'bangladesh'})
+>>> Dogi.objects.create(name='ncp', data={})
+>>> Dogi.objects.create(name='trump', data={'breed': 'america', 'tricks': ['kill', 'fight']})
+
+-- query
+>>> Dogi.objects.filter(data__has_key='owner')
+<QuerySet [<Dogi: hasina>, <Dogi: khaleda>]>
+
+>>> Dogi.objects.filter(data__has_key='tricks')
+<QuerySet [<Dogi: trump>]>
+
+
+# Django যখন has_key ব্যবহার করে, এটি SQL এর JSON ফাংশনগুলো ব্যবহার করে (যেমন PostgreSQL-এ ? অপারেটর বা MySQL-এ
+JSON_CONTAINS_PATH() ইত্যাদি)। অর্থাৎ Django নিজে বুঝে নেয় কোন ডাটাবেস ব্যাকএন্ড ব্যবহার হচ্ছে এবং সেই অনুযায়ী SQL জেনারেট করে।
+
+> For PostgreSQL
+SELECT * FROM dog WHERE data ? 'owner';
+
+> For Mysql
+SELECT * FROM dog WHERE JSON_CONTAINS_PATH(data, 'one', '$.owner');
+
+
+# Limitations
+has_key nested key check করতে পারে না। যদি, data = {"owner": {"name": "Bob"}} হয়.
+Dog.objects.filter(data__has_key="owner__name")    # query কাজ করবে না
+
+# we can check list of key is exist in top level of JSONField
+>>> Dogi.objects.filter(data__has_keys=['breed', 'tricks'])
+<QuerySet [<Dogi: trump>]>
+
+>>> Dogi.objects.filter(data__has_keys=['breed', 'owner'])
+<QuerySet [<Dogi: hasina>, <Dogi: khaleda>]>

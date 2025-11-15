@@ -1,0 +1,150 @@
+Q : What is an Intermediate Model?
+-> An intermediate model (also called a “through model”) is the actual database table that connects two models in a
+Many-to-Many (M2M) relationship.
+
+In the database, a many-to-many relationship cannot exist directly between two tables. It is always implemented using
+a third table (the intermediate table) that stores the relationship pairs.
+
+# Example :
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(Person)
+
+When Django sees ManyToManyField, Django automatically creates an intermediate table, typically named : appname_group_members
+and the table will contain columns:
+-----------------------------
+| id | group_id | person_id |
+| -- | -------- | --------- |
+| 1  | 2        | 5         |
+| 2  | 2        | 7         |
+| 3  | 3        | 8         |
+-----------------------------
+
+This hidden table acts as the link between both models. In ORM we use : group.members.add(person)
+and Django internally inserts a record into this intermediate table.
+
+
+Q : Why Use an Explicit Intermediate Model?
+-> We use an explicit intermediate model when we need to store extra information about the relationship itself.
+
+# Without Intermediate Model : group.members.add(person)
+This only records that the person is part of that group — no extra details.
+
+# With Intermediate Model
+Suppose we need to store when a person joined a group, or who invited them. Then we define a custom through model:
+
+class Membership(models.Model):
+    person = models.ForeignKey(Person, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    date_joined = models.DateField()
+    invited_by = models.CharField(max_length=100)
+
+and then in Group:
+
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(
+        Person,
+        through='Membership',
+        related_name='groups'
+    )
+
+
+Now the connection happens via the Membership model. we can keep relationship-specific metadata — data about the
+association itself, not just about either side.
+
+- In the Database Now We can Save Like :
+--------------------------------------------------------
+| id | person_id | group_id | date_joined | invited_by |
+| -- | --------- | -------- | ----------- | ---------- |
+| 1  | 1         | 2        | 2025-10-05  | Admin      |
+| 2  | 3         | 2        | 2025-10-05  | Alice      |
+--------------------------------------------------------
+
+# through parameter
+-> through tells Django which model to use as the intermediate table.
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(
+        Person,
+        through='Membership',  # custom intermediate model
+        related_name='groups'
+    )
+
+Here, through='Membership' tells Django not to create a hidden join table. Instead, Django will use the Membership
+model as the intermediate table. So the M2M connection happens like this :
+    Group <--> Membership <--> Person
+
+# through_fields parameter
+When Django cannot automatically determine which fields in the through model link to which side, we must define it
+manually using through_fields. This is required especially when:
+    - The through model has more than two foreign keys to the same models, or
+    - Django cannot infer the direction automatically.
+
+- Example :
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(
+        Person,
+        through='Membership',
+        through_fields=('group', 'person')
+    )
+
+class Membership(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    person = models.ForeignKey(Person, on_delete=models.CASCADE)
+    inviter = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='invited_memberships')
+    date_joined = models.DateField()
+
+Here, Django sees two foreign keys to the same model (Person):
+    - One is person
+    - Another is inviter
+So it cannot guess automatically which one represents the actual member and which is the inviter. To make it
+unambiguous, we explicitly tell Django : through_fields=('group', 'person')
+
+This means:
+    - group field → relates to the model that defines the ManyToManyField (Group)
+    - person field → relates to the target model (Person)
+Without through_fields, Django will raise:
+    ValueError: Cannot determine which ForeignKey to use for ManyToManyField
+
+
+# ORM Behavior with Intermediate Model
+# Error when using custom through model
+group.members.add(person)
+
+# We must create the relationship explicitly:
+    Membership.objects.create(group=group, person=person, date_joined='2025-10-05')
+This gives us full control over how the connection is stored.
+
+
+# Example
+from datetime import date
+
+anik = Person.objects.create(name="anik")
+money = Group.objects.create(name="money_grp")
+
+Membership.objects.create(
+    person=anik,
+    group=money,
+    date_joined=date(1962, 8, 16),
+    invite_reason="Needed a drummer"
+)
+
+
+# through_defaults
+-> When we use .add(), .create(), or .set() with a through model that has extra fields, we must specify those
+extra values using through_defaults.
+
+beatles.members.add(
+    ringo,
+    through_defaults={'date_joined': date(1962, 8, 16), 'invite_reason': 'Needed a drummer'}
+)
+
+Otherwise Django won’t know how to fill date_joined or invite_reason.

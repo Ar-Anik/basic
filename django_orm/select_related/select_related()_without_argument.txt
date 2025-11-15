@@ -1,0 +1,62 @@
+# Reference select_related apps Model City, Person, Book, Publisher.
+
+চারটি মডেলের মধ্যে সম্পর্ক নিচের মতো:
+- Publisher → book → Book (OneToOneField, non-null)
+- Book → author → Person (ForeignKey, non-null)
+- Person → hometown → City (ForeignKey, nullable — কারণ null=True)
+
+তাহলে সম্পর্কের দিক থেকে দেখা যাচ্ছে কিছু সম্পর্ক non-nullable, আবার কিছু nullable।
+
+# Case-1: without select_related
+publisher = Publisher.objects.get(id=4)
+book = publisher.book
+author = book.author
+city = author.hometown
+
+এক্ষেত্রে Django ৪টি আলাদা SQL query চালাবে:
+- Publisher fetch
+- Book fetch
+- Person fetch
+- City fetch
+
+# Case-2: with select_related and it argument
+যদি নির্দিষ্ট Relation গুলো select_related() দিয়ে আগে থেকে উল্লেখ করা হয়:
+>>> publisher = Publisher.objects.select_related('book__author__hometown').get(pk=2)
+
+এই query একবারেই Publisher → Book → Person → City টেবিলগুলোকে JOIN করে সব ডেটা নিয়ে আসবে। ফলে নিচের অ্যাক্সেসগুলো আর নতুন কোনো
+query তৈরি করবে না:
+- publisher.book                      # No DB hit
+- publisher.book.author               # No DB hit
+- publisher.book.author.hometown      # No DB hit
+
+এর পারফরম্যান্সের জন্য খুব কার্যকর যখন প্রয়োজনীয় Relations গুলো জানা আছে।
+
+
+# Case-3: with select_related and without argument
+যখন select_related() কোনো আর্গুমেন্ট ছাড়াই ব্যবহার করা হয়:
+>>> publisher = Publisher.objects.select_related().get(id=2)
+
+Django স্বয়ংক্রিয়ভাবে সব non-nullable ForeignKey এবং OneToOneField follow করে। এই ক্ষেত্রে Django নিচের Relations গুলো follow করবে:
+- Publisher → book (OneToOne, non-null)
+- book → author (ForeignKey, non-null)
+কিন্তু author → hometown (nullable) Django ফলো করবে না কারণ hometown null হতে পারে।
+
+অর্থাৎ, এই query নিচের JOIN করবে:
+SELECT select_related_publisher.id,
+       select_related_publisher.name,
+       select_related_publisher.book_id,
+       select_related_book.id,
+       select_related_book.title,
+       select_related_book.author_id,
+       select_related_person.id,
+       select_related_person.name,
+       select_related_person.hometown_id
+FROM select_related_publisher
+         INNER JOIN select_related_book ON (select_related_publisher.book_id = select_related_book.id)
+         INNER JOIN select_related_person ON (select_related_book.author_id = select_related_person.id)
+WHERE select_related_publisher.id = 2
+LIMIT 21
+
+City টেবিল এই query-তে JOIN হবে না, কারণ Person.hometown nullable।
+
+তাই publisher.book.author.hometown আলাদা query run করবে.

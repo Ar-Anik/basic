@@ -1,0 +1,61 @@
+-> in json data type we can use json data key for filtering object or make query.
+
+# object insert like:
+>>> Dog.objects.create(name='Rufus', data={
+...   'breed': 'labrador',
+...   'owner': {
+...       'name': 'Bob',
+...       'other_pets': [{'name': 'Fishy'}]
+...   }
+... })
+<Dog: Rufus>
+
+>>> Dog.objects.create(name='Oggy', data={
+...   'breed': 'India',
+...   'owner': {
+...       'name': 'Anik',
+...       'other_pets': [{'name': 'zoggiy'}]
+...   }
+... })
+<Dog: Oggy>
+
+>>> Dog.objects.create(name="Hasina", data={"breed": "bal", "owner": None})
+<Dog: Hasina>
+
+
+# query by json key
+>>> Dog.objects.filter(name='Oggy')
+<QuerySet [<Dog: Oggy>]>
+
+# We can query nested JSON keys using Django’s double-underscore (__) lookup syntax.
+>>> Dog.objects.filter(data__breed='bal')
+<QuerySet [<Dog: Hasina>]>
+
+
+# Multiple keys can be chained together to form a path lookup:
+>>> Dog.objects.filter(data__owner__name='Anik')
+<QuerySet [<Dog: Oggy>]>
+
+>>> Dog.objects.filter(data__owner__name='Oggy')
+<QuerySet []>
+
+>>> Dog.objects.filter(data__owner__name='Bob')
+<QuerySet [<Dog: Rufus>]>
+
+
+# use integer key index in double underscore lookup
+>>> Dog.objects.filter(data__owner__other_pets__0__name='zoggiy')
+<QuerySet [<Dog: Oggy>]>
+
+
+# Again insert Object :
+>>> Dog.objects.create(name="kader", data={'breed': 'bal'})
+
+# filter by Null Value :
+>>> Dog.objects.filter(data__owner__isnull=True)
+<QuerySet [<Dog: Putin>, <Dog: Modi>, <Dog: kader>]>
+
+>>> Dog.objects.filter(data__owner=None)
+<QuerySet [<Dog: hasina>]>
+
+

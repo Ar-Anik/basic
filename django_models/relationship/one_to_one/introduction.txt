@@ -1,0 +1,83 @@
+Q : What is OneToOneField
+-> In Django ORM, a OneToOneField is used when we want to create a one-to-one relationship between two models.
+That means each record in one table is connected to exactly one record in another table. It works almost like
+a ForeignKey with unique=True. However, Django automatically ensures that the relationship stays unique — no
+duplicates can exist.
+
+# Syntax
+models.OneToOneField(
+    to,                     # The related model
+    on_delete,              # What happens when related object is deleted
+    parent_link=False,      # Used in multi-table inheritance
+    limit_choices_to=None,  # Limit available related objects in forms/admin
+    related_name=None,      # Reverse access name
+    related_query_name=None,# Reverse filter name in ORM queries
+    to_field=None,          # Which field on related model to link to
+    db_constraint=True,     # Whether to enforce DB-level constraint
+    **options               # Other common field options (null, blank, etc.)
+)
+
+
+# to
+Specifies the model that this field will relate to. It can be:
+    - A model class directly (e.g., Department)
+    - A string 'self' (for self-referential relations)
+    - A string 'app_label.ModelName' (for deferred models)
+
+
+# on_delete
+Specifies what happens when the related object is deleted. Common options :
+----------------------------------------------------------------------------------
+| Value                | Description                                             |
+| -------------------- | ------------------------------------------------------- |
+| models.CASCADE       | Deletes this object when the related object is deleted. |
+| models.SET_NULL      | Sets field to NULL when related object is deleted.      |
+| models.PROTECT       | Prevents deletion if there are dependent objects.       |
+| models.RESTRICT      | Like PROTECT but newer and more restrictive.            |
+| models.SET_DEFAULT   | Sets the field to default value when deleted.           |
+| models.DO_NOTHING    | Leaves the reference as-is (unsafe).                    |
+----------------------------------------------------------------------------------
+
+
+# related_name
+Defines the name used to access the reverse relationship. Example :
+class Employee(models.Model):
+    department = models.OneToOneField(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='employee'
+    )
+
+We can now access the employee from a department object like this:
+>>> dept = Department.objects.first()
+>>> dept.employee.name
+
+
+# related_query_name
+Defines the name used for reverse filtering in ORM queries. Example :
+class Employee(models.Model):
+    department = models.OneToOneField(
+        Department,
+        on_delete=models.CASCADE,
+        related_query_name='staff'
+    )
+
+- Now we can query:
+Department.objects.filter(staff__name__icontains="Alice")
+
+
+# to_field
+Specifies which field on the related model should be linked instead of its primary key.
+class Department(models.Model):
+    code = models.CharField(max_length=10, unique=True)
+
+class Employee(models.Model):
+    department = models.OneToOneField(
+        Department,
+        on_delete=models.CASCADE,
+        to_field='code'
+    )
+
+# db_constraint
+If set to False, Django will not create a database-level constraint for the relationship. Useful in cases
+like legacy databases or performance-sensitive applications.

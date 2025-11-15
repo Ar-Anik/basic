@@ -1,0 +1,75 @@
+-> In Django, by default each app contains a single `models.py` file where all the models are defined. While this works for
+small apps, large apps with many models can become hard to maintain. Organizing models in a package is a clean and scalable
+solution.
+
+1. Default App Structure
+When we create a Django app using: python manage.py startapp myapp
+
+Django creates the following structure:
+    myapp/
+    ├── admin.py
+    ├── apps.py
+    ├── models.py   ← All models go here by default
+    ├── views.py
+    └── ...
+
+# Problem: If the number of models grows, this single file becomes too large and difficult to manage.
+
+2. Organizing Models into a Package
+Instead of keeping all models in one file, we can split them into multiple files and create a models package.
+
+Step 1: Delete models.py
+Remove the original models.py file in our app:
+    myapp/
+    └── models.py   ← Delete this
+
+Step 2: Create a models folder
+Inside our app, create a folder named models/ and add an empty __init__.py file to make it a Python package.
+    myapp/
+    ├── models/
+    │   ├── __init__.py
+    │   ├── organic.py
+    │   └── synthetic.py
+    ├── admin.py
+    ├── apps.py
+    └── views.py
+
+Step 3: Define models in separate files
+File : app_name/models/organic.py
+from django.db import models
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+
+File : app_name/models/synthetic.py
+from django.db import models
+class Robot(models.Model):
+    model_number = models.CharField(max_length=100)
+
+-> Each file should contain related models to keep the structure clean.
+
+Step 4: Import models in __init__.py
+Django loads models from app_name.models. So, we must import them in __init__.py:
+
+File : app_name/models/init.py
+from .organic import Person
+from .synthetic import Robot
+
+Now, Django knows that Person and Robot are part of app_name.models.
+
+Step 5: Using the models
+After this setup, models can be used normally:
+
+from myapp.models import Person, Robot
+person = Person.objects.create(name="Alice")
+robot = Robot.objects.create(model_number="RX-78")
+
+
+Q : Why Explicit Imports Are Better?
+Instead of using : from .models import *
+Explicit imports are recommended : from .organic import Person and from .synthetic import Robot
+
+Because of Advantages:
+    1. Avoids namespace clutter
+    2. Makes code more readable
+    3. Works better with linters and IDE autocomplete
+    4. Prevents accidental overriding of models with same names

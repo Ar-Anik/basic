@@ -1,0 +1,19 @@
+# Equvalent of Limit and Offset
+
+# This return the first 5 object (Limit 5)
+>>> Entry.objects.all()[:5]
+
+# OFFSET 5 LIMIT 5
+>>> Entry.objects.all()[5:10]
+
+# Negative indexing (i.e. Entry.objects.all()[-1]) is not supported.
+
+# Return a list of every second object of the first 10:
+>>> Entry.objects.all()[:10:2]
+
+# Returns the first Entry in the database, after ordering entries alphabetically by headline:
+>>> Entry.objects.order_by("headline")[0]
+or
+>>> Entry.objects.order_by("headline")[0:1].get()
+
+The first of these will raise IndexError while the second will raise DoesNotExist if no objects match the given criteria.

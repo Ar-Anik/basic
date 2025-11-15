@@ -1,0 +1,184 @@
+# Reference orm_practice prefetch_related apps
+
+একটি QuerySet যখন তৈরি করা হয় সেটি সাধারণত মূল মডেলের ডেটা আনে। কিন্তু যদি সেই মডেলের কোনো ForeignKey বা OneToOneField সম্পর্ক থাকে
+তাহলে সম্পর্কিত মডেলের ডেটা আনতে গেলে আলাদা আলাদা ডেটাবেজ কোয়েরি হয়। এর ফলে কোয়েরির সংখ্যা বেড়ে যায়, যাকে বলে “N+1 query problem”।
+
+এই সমস্যা solved এর জন্য select_related() ব্যবহার করা হয়। select_related() এমনভাবে কাজ করে যে এটি একটি SQL JOIN তৈরি করে এবং
+মূল টেবিলের সঙ্গে সম্পর্কিত টেবিলের ডেটা একই কোয়েরিতে নিয়ে আসে। ফলে ডেটাবেজে একবারেই প্রয়োজনীয় সব related ডেটা চলে আসে, এবং অতিরিক্ত
+কোয়েরি লাগে না। তবে এই পদ্ধতি কেবলমাত্র Single Value return করে এমন relation-এর ক্ষেত্রেই (single-valued relationships) ব্যবহার
+করা যায়। যেমন:
+- ForeignKey
+- OneToOneField
+
+কারণ যদি Many-to-Many বা reverse ForeignKey relation-এর ক্ষেত্রে এটি ব্যবহার করা হয় তাহলে ডেটাবেজে অনেকগুলো রেকর্ড মিলে গিয়ে result
+অনেক বড় হয়ে যায়। তাই Django সেখানে select_related ব্যবহার করতে দেয় না।
+
+prefetch_related() Django ORM-এর আরেকটি গুরুত্বপূর্ণ পদ্ধতি যা select_related()-এর মতোই অতিরিক্ত ডেটাবেজ কোয়েরির সংখ্যা কমাতে সাহায্য
+করে। select_related() একটিমাত্র কোয়েরি চালিয়ে SQL JOIN ব্যবহার করে সব ডেটা আনে। কিন্তু prefetch_related() একাধিক কোয়েরি চালায় (প্রতিটি
+relation-এর জন্য আলাদা করে) এরপর Django সেই ডেটাগুলোর মধ্যে relation অনুযায়ী related data গুলি একসাথে মেমোরিতে সংরক্ষণ করে রাখে
+যাতে পরবর্তীতে যখন related model এর query করা হয়(by QuerySet) তখন নতুন কোয়েরি না লাগে।
+
+এই কারণে prefetch_related() অনেক বেশি flexible. এটি এমন relations গুলোকেও prefetch করে আনতে পারে যেগুলো select_related()
+দিয়ে সম্ভব নয়।
+
+# যেসব Relation-এর জন্য prefetch_related() কাজ করে:
+1. Many-to-Many — একজন Author-এর অনেকগুলো Book আছে এবং একটি Book-এর অনেক গুলো Author আছে।
+2. Many-to-One —  অনেক Book একটি Publisher-এর under-এ।
+3. GenericRelation — Generic relation গুলোও আগেভাগে আনা যায় যা select_related() দিয়ে সম্ভব নয়।
+4. ForeignKey এবং OneToOneField — এগুলোর জন্যও prefetch_related() ব্যবহার করা যায় যদিও সাধারণত select_related()-ই বেশি কার্যকর।
+5. GenericForeignKey — এটি Django-র ContentTypes framework ব্যবহার করে তৈরি একটি বিশেষ ধরনের relation। এই related relational data
+আগেভাগে আনতে হলে GenericPrefetch ব্যবহার করতে হয় এবং প্রতিটি ContentType-এর জন্য আলাদা queryset querysets প্যারামিটারে দিতে হয়।
+
+
+Q : prefetch_related কী?
+-> prefetch_related হলো Django ORM-এর একটি QuerySet মেথড, যার কাজ হলো — related মডেলের data আগেভাগে নিয়ে আসা
+(prefetch করা), যাতে পরে যখন related data দরকার হবে তখন Django আলাদা করে অনেকগুলো কোয়েরি না চালিয়ে দ্রুত ডেটা দিতে পারে।
+
+# Example :
+ধরা যাক দুটি Model আছে — একজন Author এবং তার লেখা অনেকগুলো Book।
+
+class Author(models.Model):
+    name = models.CharField(max_length=100)
+
+class Book(models.Model):
+    title = models.CharField(max_length=100)
+    author = models.ForeignKey(Author, on_delete=models.CASCADE)
+
+# insert query
+>>> a1 = Author.objects.create(name='Anik')
+>>> a2 = Author.objects.create(name='Rafi')
+>>> a3 = Author.objects.create(name='Nadia')
+
+>>> b1 = Book.objects.create(title='Python Basics')
+>>> b2 = Book.objects.create(title='Advanced Django')
+
+>>> b1.authors.add(a1, a2)
+>>> b2.authors.add(a2, a3)
+
+# এখন যদি আমরা কোয়েরি চালাই —
+books = Book.objects.all()
+for book in books:
+    print(book.author.name)
+
+এখানে Problem হলো প্রথমে Django সব বই আনবে (Book.objects.all()), তারপর প্রতিটি বইয়ের Author আনতে আবার আলাদা আলাদা ডেটাবেজ
+কোয়েরি চালাবে। যদি ১০০টি বই থাকে তাহলে ১০১টা কোয়েরি হবে (১টা বই আনতে + ১০০টা লেখক আনতে)। এটাই N+1 query problem।
+
+
+Q : prefetch_related কীভাবে Problem Solve করে?
+-> prefetch_related() ব্যবহার করলে Django আগেভাগেই related মডেলের (Author) data নিয়ে আসে, তবে এটি একসাথে নয় — দুই বা একাধিক
+আলাদা কোয়েরি run করে then এই data use করে Django related model এর জন্য QuerySet object তৈরি করে, এই QuerySet instance-এর
+result আগে থেকে Cache করা থাকে(fetch করা data দিয়ে). পরে যখন related model গুলার জন্য QuerySet এর মাধ্যমে query করা হয় সে গুলা
+আর database-এ hit করে না , direct Cache থেকে result return করে.
+
+# Example :
+>>> from prefetch_related.models import Author, Book
+>>> from django.db import connection, reset_queries
+>>> reset_queries()
+
+# query by prefetch_related
+>>> books = Book.objects.prefetch_related('authors')
+
+>>> for q in connection.queries:
+...   print(q['sql'])
+...
+
+>>> for book in books:
+...   print(book)
+...   for author in book.authors.all():
+...      print(author.name)
+...
+
+Python Basics
+Anik
+Rafi
+Advanced Django
+Rafi
+Nadia
+
+>>> for q in connection.queries:
+...   print(q['sql'])
+...
+
+                SELECT VERSION(),
+                       @@sql_mode,
+                       @@default_storage_engine,
+                       @@sql_auto_is_null,
+                       @@lower_case_table_names,
+                       CONVERT_TZ('2001-01-01 01:00:00', 'UTC', 'UTC') IS NOT NULL
+
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED
+SELECT `prefetch_related_book`.`id`, `prefetch_related_book`.`title` FROM `prefetch_related_book`
+SELECT (`prefetch_related_book_authors`.`book_id`) AS `_prefetch_related_val_book_id`, `prefetch_related_author`.`id`, `prefetch_related_author`.`name` FROM `prefetch_related_author` INNER JOIN `prefetch_related_book_authors` ON (`prefetch_related_author`.`id` = `prefetch_related_book_authors`.`author_id`) WHERE `prefetch_related_book_authors`.`book_id` IN (1, 2)
+
+-> prefetch_related('authors') ব্যবহারের ফলে Django মাত্র ২টি SQL query চালায়।
+- 1 query for all books
+SELECT prefetch_related_book.id, prefetch_related_book.title FROM prefetch_related_book;
+
+- 1 query for all related authors
+SELECT (prefetch_related_book_authors.book_id) AS _prefetch_related_val_book_id,
+       prefetch_related_author.id,
+       prefetch_related_author.name
+FROM prefetch_related_author INNER JOIN
+    prefetch_related_book_authors ON (prefetch_related_author.id = prefetch_related_book_authors.author_id)
+WHERE prefetch_related_book_authors.book_id IN (1, 2);
+
+-> এই দুইটি query সম্পন্ন হওয়ার পর Django:
+- সব Book object first query থেকে নেয়।
+- সব related Author object second query থেকে নেয়।
+- এরপর মেমোরিতে (cache-এ) এই দুই ডেটাসেটকে একত্র করে রাখে।
+
+ফলে যখন লেখা হয়:
+>>> for author in book.authors.all():
+...    print(author.name)
+
+তখন Django নতুন করে কোনো query database-এ পাঠায় না — কারণ Authors ডেটা আগেই আনা ও cache-এ সংরক্ষিত আছে।
+
+
+# Another Example :
+class Topping(models.Model):
+    name = models.CharField(max_length=30)
+
+class Pizza(models.Model):
+    name = models.CharField(max_length=50)
+    toppings = models.ManyToManyField(Topping)
+
+    def __str__(self):
+        return "%s (%s)" % (self.name, ", ".join(topping.name for topping in self.toppings.all()))
+
+>>> from prefetch_related.models import Topping, Pizza
+>>> t1 = Topping.objects.create(name="Cheese")
+>>> t2 = Topping.objects.create(name="Tomato")
+>>> t3 = Topping.objects.create(name="Mushroom")
+>>> t4 = Topping.objects.create(name="Olive")
+
+>>> p1 = Pizza.objects.create(name="Margherita")
+>>> p2 = Pizza.objects.create(name="Veggie Delight")
+>>> p3 = Pizza.objects.create(name="Mushroom Special")
+
+>>> p1.toppings.add(t1, t2)
+>>> p2.toppings.add(t1, t2, t4)
+>>> p3.toppings.add(t1, t3, t4)
+
+>>> pizzas = Pizza.objects.prefetch_related('toppings')
+>>> for pizza in pizzas:
+...  print(pizza)
+...
+Margherita (Cheese, Tomato)
+Veggie Delight (Cheese, Tomato, Olive)
+Mushroom Special (Cheese, Mushroom, Olive)
+
+
+-> The additional queries in prefetch_related() are executed after the QuerySet has begun to be evaluated and the
+primary query has been executed.
+
+-> যখন আমরা prefetch_related("toppings") ব্যবহার করি তখন Django প্রথমে primary কুয়েরিটা চালায় — অর্থাৎ Pizza টেবিল থেকে সব Pizza
+রেকর্ড নিয়ে আসে। এরপর আলাদা আরেকটা কুয়েরি চালানো হয় toppings গুলো আনার জন্য (যেগুলো ManyToMany সম্পর্কিত)। কিন্তু Django বা
+prefetch_related()-এর মধ্যে এমন কোনো ব্যবস্থা নেই যা নিশ্চিত করবে যে — এই দুই কুয়েরির মাঝখানে ডাটাবেসে কোনো পরিবর্তন হবে না। অর্থাৎ এই দুইটা
+কুয়েরির মধ্যে যদি কেউ কোনো Pizza ডিলিট করে ফেলে, তাহলে সেই Pizza-র toppings-গুলো দ্বিতীয় কুয়েরিতে আর পাওয়া যাবে না। ফলে result
+অসমঞ্জস্যপূর্ণ বা ভুল মনে হতে পারে — Django দেখাবে যে সেই Pizza-র কোনো toppings নেই, যদিও আসলে সেই Pizza আগে toppings যুক্ত ছিল।
+
+# Example :
+>>> Pizza.objects.prefetch_related("toppings")
+#  "Hawaiian" Pizza was deleted in another shell.
+<QuerySet [<Pizza: Hawaiian ()>, <Pizza: Seafood (prawns, smoked salmon)>]>
+

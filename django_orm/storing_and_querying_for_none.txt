@@ -1,0 +1,78 @@
+# Reference orm_practice application json_app, here Dog Model.
+
+-> অন্য ফিল্ডগুলোর মতোই, যদি কোনো ফিল্ডে None মান সংরক্ষণ করা হয়, তবে সেটি ডাটাবেসে SQL NULL আকারে সংরক্ষিত হয়। তবে যদিও এটি recommended
+নয়, তবুও চাইলে Value(None, JSONField()) ব্যবহার করে SQL NULL এর পরিবর্তে JSON scalar null সংরক্ষণ করা সম্ভব।
+
+যে মানই সংরক্ষণ করা হোক না কেন — ডাটাবেস থেকে ডেটা ফেরত আনার সময়, JSON scalar null এবং SQL NULL — দুটিই Python-এ একইভাবে None
+হিসেবে উপস্থাপিত হয়। অর্থাৎ ডাটাবেস থেকে ডেটা read করার সময় এই দুটির মধ্যে পার্থক্য করা কঠিন হয়ে যায়।
+
+# কুয়েরি করার সময়:
+যখন কোনো কুয়েরিতে None ব্যবহার করা হয়, সেটি সবসময় JSON null হিসেবে বিবেচিত হয়। অন্যদিকে, যদি SQL NULL-এর জন্য কুয়েরি করতে হয়, তাহলে
+isnull ব্যবহার করতে হয়।
+
+>>> from django.db.models import Value, JSONField
+>>> Dog.objects.create(name="Putin", data=None)
+>>> Dog.objects.create(name="Modi", data=Value(None, JSONField()))
+
+>>> Dog.objects.filter(data="null")
+<QuerySet []>
+
+>>> Dog.objects.filter(data="None")
+<QuerySet []>
+
+>>> Dog.objects.filter(data=None)
+<QuerySet [<Dog: Modi>]>
+
+>>> Dog.objects.filter(data='')
+<QuerySet []>
+
+>>> Dog.objects.filter(data='None')
+<QuerySet []>
+
+>>> Dog.objects.filter(data__isnull=True)
+<QuerySet [<Dog: Putin>]>
+
+>>> Dog.objects.filter(data__isnull=False)
+<QuerySet [<Dog: Modi>]>
+
+
+Q : What Value(None, JSONField()) actually means?
+-> Value(None, JSONField()) is a Django ORM expression object.
+It tells Django: “Create a JSON value whose top-level content is the JSON scalar null, not SQL NULL.”
+
+> Deep internal meaning:
+- Value() represents a literal value in SQL expressions.
+- The first argument (None) is the actual Python value.
+- The second argument (JSONField()) tells Django how to interpret that value — in this case, as a JSON value, not a
+SQL value.
+
+So, this: Value(None, JSONField()). --> Generate a JSON value: null (as a JSON scalar), not SQL NULL.
+
+
+Q : What happens in the database when saving each version?
+> Example-1 – data=None
+Dog.objects.create(name="Putin", data=None)
+
+Django ORM treats None as SQL NULL. In SQL, this becomes :
+    INSERT INTO dog (name, data) VALUES ('Putin', NULL);
+So in the database, the data column literally contains SQL NULL — which means “no value in this column”, not a JSON value.
+
+> Example-2 – data=Value(None, JSONField())
+Dog.objects.create(name="Modi", data=Value(None, JSONField()))
+
+Django uses a JSON expression (Value(None, JSONField())) to represent a JSON scalar null. This time, Django inserts
+actual JSON into the column : INSERT INTO dog (name, data) VALUES ('Modi', 'null');
+
+Q : Why queries behave different way?
+---------------------------------------------------------------------------------------------------------------------------
+| Query                                     | What it checks                                          | Matches            |
+| ------------------------------------------| --------------------------------------------------------| -------------------|
+| 1. Dog.objects.filter(data=None)          | Django interprets `None` as JSON null, not SQL NULL     | Matches Modi       |
+----------------------------------------------------------------------------------------------------------------------------
+| 2. Dog.objects.filter(data__isnull=True)  | Explicitly checks for SQL NULL                          | Matches Putin      |
+----------------------------------------------------------------------------------------------------------------------------
+| 3. Dog.objects.filter(data__isnull=False) | Checks for not SQL NULL                                 | Matches Modi       |
+----------------------------------------------------------------------------------------------------------------------------
+| 4. Dog.objects.filter(data='null')        | Checks for JSON string "null" (string type)             | No matches         |
+----------------------------------------------------------------------------------------------------------------------------
+

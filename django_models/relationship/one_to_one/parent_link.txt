@@ -1,0 +1,92 @@
+# Reference django_model parent_link apps
+
+-> parent_link is a parameter of OneToOneField that tells Django whether the field should be treated as the link
+to a parent model in multi-table model inheritance. it is parent-child inheritance where parent and child both primary
+key are same.
+
+-> When we create a OneToOneField manually, it’s just a relationship between two models. But when Django uses
+OneToOneField internally for model inheritance, it uses parent_link=True.
+
+# Normal OneToOneField
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+    age = models.PositiveIntegerField()
+
+    def __str__(self):
+        return f"{self.name} --> {self.age}"
+
+
+class Employee(Person):
+    # This field is automatically created internally:
+    # person_ptr = models.OneToOneField(Person, parent_link=True, primary_key=True, on_delete=models.CASCADE)
+    department = models.CharField(max_length=100)
+    salary = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.name} - {self.department}"
+
+Here:
+- Each Address belongs to one Student
+- But Address is not inheriting from Student
+- parent_link is False (default)
+
+
+# OneToOneField in Model Inheritance
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+
+class Employee(Person):
+    department = models.CharField(max_length=100)
+
+When we do table inheritance, Django automatically creates a OneToOneField in Employee like this:
+person_ptr = models.OneToOneField(
+    Person,
+    on_delete=models.CASCADE,
+    parent_link=True,
+    primary_key=True
+)
+
+
+# parent_link=True tells Django:
+This is the link that connects the child table (Employee) to its parent table (Person). When we query an Employee, Django
+can automatically access fields from Person Django ORM knows this is an inheritance link, not just a normal relation.
+
+# Custom Inheritance Example
+class Base(models.Model):
+    base_field = models.CharField(max_length=100)
+
+class Derived(Base):
+    base_ptr = models.OneToOneField(
+        Base,
+        on_delete=models.CASCADE,
+        parent_link=True,
+        primary_key=True
+    )
+    extra_field = models.CharField(max_length=100)
+
+This behaves the same as normal inheritance, but we explicitly control the parent link field name.
+
+
+# Query
+>>> from parent_link.models import Person, Employee
+>>> p1 = Person.objects.create(name='Anik', age=14)
+>>> e1 = Employee.objects.create(name='Sourov', age=30, department='MRT', salary=75000)
+>>> Employee.objects.values()
+<QuerySet [{'id': 2, 'name': 'Sourov', 'age': 30, 'person_ptr_id': 2, 'department': 'MRT', 'salary': Decimal('75000.00')}]>
+
+>>> e1.name
+'Sourov'
+>>> e1.pk
+2
+>>> e1.person_ptr_id
+2
+>>> e1.person_ptr
+<Person: Sourov --> 30>
+
+>>> Person.objects.get(name='Sourov')
+<Person: Sourov --> 30>
+
+
+
+# Important Note :
+We cannot have multiple parent_link=True fields in a single model.

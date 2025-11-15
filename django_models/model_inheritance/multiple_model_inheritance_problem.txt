@@ -1,0 +1,124 @@
+Link : https://docs.djangoproject.com/en/5.2/topics/db/models/
+
+-> When a Django model inherits from multiple non-abstract parent models, each parent model automatically creates its own
+primary key (id) by default. If a child model tries to inherit from two or more such parents, Django cannot decide which
+id to use, and it raises :
+    django.core.exceptions.FieldError: AutoFields in parent models clash in model 
+
+This is a primary key conflict, which must be resolved for multiple inheritance to work.
+
+# Problem
+class Article(models.Model):
+    title = models.CharField(max_length=100)
+
+class Book(models.Model):
+    name = models.CharField(max_length=100)
+
+class BookReview(Book, Article):
+    review = models.TextField()
+
+-> after running makemigrations raises FieldError, because both Article and Book have implicit id fields.
+
+# Solution 1 — Explicit Primary Key in Parent Models
+We can define a custom AutoField primary key in each parent model:
+
+from django.db import models
+
+class Article(models.Model):
+    article_id = models.AutoField(primary_key=True)
+    title = models.CharField(max_length=100)
+    content = models.TextField()
+
+    def __str__(self):
+        return self.title
+
+
+class Book(models.Model):
+    book_id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=100)
+    author = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+
+
+class BookReview(Book, Article):
+    review = models.TextField()
+    rating = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.name} ({self.title})"
+
+-> Here article_id/book_id, Explicit primary key replaces default id to avoid conflict.
+
+
+# Solution 2 — Using a Common Ancestor
+A cleaner approach is to create a common ancestor model (Piece) which holds the primary key. Then, each parent links to
+it using OneToOneField with parent_link=True :
+
+class Piece(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Piece {self.id}"
+
+
+class Article(Piece):
+    article_piece = models.OneToOneField(
+        Piece, on_delete=models.CASCADE, parent_link=True
+    )
+    title = models.CharField(max_length=100)
+    content = models.TextField()
+
+    def __str__(self):
+        return self.title
+
+
+class Book(Piece):
+    book_piece = models.OneToOneField(
+        Piece, on_delete=models.CASCADE, parent_link=True
+    )
+    name = models.CharField(max_length=100)
+    author = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+
+
+class BookReview(Book, Article):
+    review = models.TextField()
+    rating = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.name} ({self.title})"
+
+
+# Command for Test
+python manage.py makemigrations
+python manage.py migrate
+python manage.py shell
+from app_name.models import Piece, Article, Book, BookReview
+
+>>> piece1 = Piece.objects.create()
+>>> article = Article.objects.create(article_piece=piece1, title="AI Basics", content="Intro to AI")
+
+>>> piece2 = Piece.objects.create()
+>>> book = Book.objects.create(book_piece=piece2, name="Python Mastery", author="Anik")
+
+>>> review = BookReview.objects.create(
+    article_piece=article.article_piece,
+    book_piece=book.book_piece,
+    title=article.title,
+    content=article.content,
+    name=book.name,
+    author=book.author,
+    review="Excellent coverage!",
+    rating=5
+ )
+
+>>> review.title
+'AI Basics'
+>>> review.name
+'Python Mastery'
+>>> review.review
+'Excellent coverage!'

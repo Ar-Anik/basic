@@ -1,0 +1,86 @@
+# Reference in orm_practice blog apps
+
+-> select_related() ব্যবহার করলে Django একসাথে parent ও child টেবিলের তথ্য নিয়ে আসে, যাতে পরে আবার ডাটাবেসে গিয়ে তথ্য নিতে না হয়।
+এটি কোডকে দ্রুত ও কার্যকর করে। এটি একটি পারফরম্যান্স বুস্টার (performance booster) — কারণ এটি একবারেই একটি জটিল কোয়েরি চালায়, ফলে
+পরবর্তীতে foreign-key সম্পর্কিত ডেটা অ্যাক্সেস করার সময় আর আলাদা করে ডাটাবেস কোয়েরি চালাতে হয় না।
+
+# The following examples illustrate the difference between plain lookups and select_related() lookups :
+
+>>> from blog.models import Blog, Author, Entry
+>>> from django.db import connection, reset_queries
+>>> reset_queries()
+
+# Plain Lookup
+>>> e = Entry.objects.get(id=5)
+>>> b = e.blog
+>>>
+>>> for q in connection.queries:
+...   print(q['sql'])
+...
+
+                SELECT VERSION(),
+                       @@sql_mode,
+                       @@default_storage_engine,
+                       @@sql_auto_is_null,
+                       @@lower_case_table_names,
+                       CONVERT_TZ('2001-01-01 01:00:00', 'UTC', 'UTC') IS NOT NULL
+
+SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED
+SELECT `blog_entry`.`id`, `blog_entry`.`blog_id`, `blog_entry`.`headline`, `blog_entry`.`body_text`, `blog_entry`.`pub_date`, `blog_entry`.`mod_date`, `blog_entry`.`number_of_comments`, `blog_entry`.`number_of_pingbacks`, `blog_entry`.`rating` FROM `blog_entry` WHERE `blog_entry`.`id` = 5 LIMIT 21
+SELECT `blog_blog`.`id`, `blog_blog`.`name`, `blog_blog`.`tagline` FROM `blog_blog` WHERE `blog_blog`.`id` = 5 LIMIT 21
+
+Here two query run two different time.
+
+>>> reset_queries()
+>>> e = Entry.objects.select_related('blog').get(id=5)
+>>> e = e.blog
+>>>
+>>> for q in connection.queries:
+...   print(q['sql'])
+...
+SELECT `blog_entry`.`id`, `blog_entry`.`blog_id`, `blog_entry`.`headline`, `blog_entry`.`body_text`, `blog_entry`.`pub_date`, `blog_entry`.`mod_date`, `blog_entry`.`number_of_comments`, `blog_entry`.`number_of_pingbacks`, `blog_entry`.`rating`, `blog_blog`.`id`, `blog_blog`.`name`, `blog_blog`.`tagline` FROM `blog_entry` INNER JOIN `blog_blog` ON (`blog_entry`.`blog_id` = `blog_blog`.`id`) WHERE `blog_entry`.`id` = 5 LIMIT 21
+
+Here, only one query run one time.
+
+
+# select_related() যেকোনো queryset object-এর সাথেই ব্যবহার করা যায়।
+>>> from django.utils import timezone
+>>> blog = set()
+>>> for e in Entry.objects.filter(pub_date__lt=timezone.now()).select_related('blog'):
+...   blog.add(e.blog)
+
+>>> blog
+{<Blog: Tech World>, <Blog: Daily Dev>, <Blog: Sourov Blog>, <Blog: Bangladesh Blog>}
+
+select_related("blog") ব্যবহারের ফলে Django একবারেই প্রতিটি Entry-র সঙ্গে সংশ্লিষ্ট Blog অবজেক্টগুলোকেও ডাটাবেস থেকে নিয়ে আসে। তাই পরে
+যখন e.blog ব্যবহার করা হয়, তখন Django আর ডাটাবেসে নতুন কোয়েরি চালায় না।
+
+অন্যদিকে, যদি select_related() ব্যবহার না করা হতো তাহলে লুপের প্রতিটি ইটারেশনে e.blog অ্যাক্সেস করার সময় Django আলাদা SQL কোয়েরি চালিয়ে
+সংশ্লিষ্ট Blog নিয়ে আসত — ফলে অনেকগুলো অতিরিক্ত কোয়েরি চলত (যা পারফরম্যান্স কমিয়ে দিত)।
+
+
+# The order of filter() and select_related() chaining isn’t important. These querysets are equivalent:
+
+>>> Entry.objects.filter(pub_date__lt=timezone.now()).select_related('blog')
+<QuerySet [<Entry: Everything is the same>, <Entry: Everything is the same>, <Entry: FastAPI vs Django>, <Entry: Everything is the same>, <Entry: Deploying Django with Nginx and Gunicorn>, <Entry: Understanding ManyToManyField in Django>, <Entry: Understanding ManyToManyField in Django>, <Entry: Everything is the same>, <Entry: Optimizing Django QuerySets>, <Entry: Building REST APIs with Django Rest Framework>, <Entry: Everything is the same>, <Entry: Caching Strategies in Django>, <Entry: Working with Django Forms and Widgets>, <Entry: Middleware Deep Dive in Django>, <Entry: Logging and Error Handling in Django>, <Entry: Everything is the same>]>
+
+>>> Entry.objects.select_related('blog').filter(pub_date__lt=timezone.now())
+<QuerySet [<Entry: Everything is the same>, <Entry: Everything is the same>, <Entry: FastAPI vs Django>, <Entry: Everything is the same>, <Entry: Deploying Django with Nginx and Gunicorn>, <Entry: Understanding ManyToManyField in Django>, <Entry: Understanding ManyToManyField in Django>, <Entry: Everything is the same>, <Entry: Optimizing Django QuerySets>, <Entry: Building REST APIs with Django Rest Framework>, <Entry: Everything is the same>, <Entry: Caching Strategies in Django>, <Entry: Working with Django Forms and Widgets>, <Entry: Middleware Deep Dive in Django>, <Entry: Logging and Error Handling in Django>, <Entry: Everything is the same>]>
+
+
+# Clear previous joined table
+query like : qs = Book.objects.select_related("author__hometown")
+Whenever we execute this query related tables (author and hometown) are joined so that we can access them without
+additional database hits. So Django internally stores a list of related fields that must be followed:
+        ['author', 'author__hometown']
+
+Now imagine we want reuse above queryset but we no longer want to follow those related tables (perhaps because the
+next part of our code doesn’t need them). That’s where select_related(None) comes in. so,
+    qs_no_relations = qs.select_related(None)
+Now qs_no_relations is a new queryset (querysets are immutable — Django returns a new one) and it will no longer
+follow any related tables that joined previous by select_related.
+
+
+# Chaining select_related
+Chaining select_related calls works in a similar way to other methods - that is that select_related('foo', 'bar') is
+equivalent to select_related('foo').select_related('bar').

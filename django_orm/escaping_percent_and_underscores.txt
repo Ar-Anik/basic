@@ -1,0 +1,19 @@
+যেসব field lookup SQL-এর LIKE স্টেটমেন্টের সমতুল্য কাজ করে — যেমনঃ iexact, contains, icontains, startswith, istartswith,
+endswith, এবং iendswith — সেগুলো Django স্বয়ংক্রিয়ভাবে LIKE স্টেটমেন্টে ব্যবহৃত দুইটি বিশেষ চিহ্নকে escape করে ফেলে:
+1. % → multiple-character জন্য wildcard
+2. _ → single-character জন্য wildcard
+
+অর্থাৎ, Django এই দুটি চিহ্নের বিশেষ অর্থ মুছে ফেলে সেগুলোকে সাধারণ অক্ষর হিসেবে বিবেচনা করে, যাতে SQL-এর জটিলতা নিয়ে চিন্তা করতে না হয়।
+এই abstraction (ORM layer) স্বাভাবিকভাবে কাজ করবে, SQL-এর “LIKE” সংক্রান্ত আচরণ নিয়ে ভাবতে হবে না।
+
+# Example
+যদি এমন সব Entry বের করতে চাই যাদের headline ফিল্ডে % চিহ্নটি রয়েছে :
+>>> Entry.objects.filter(headline__contains="%")
+<QuerySet [<Entry: AI Revolution 2025 %>, <Entry: Wanderlust Travel Guide %>]>
+
+এখানে Django স্বয়ংক্রিয়ভাবে % চিহ্নটিকে escape করে দেয়, তাই এটি SQL-এর wildcard হিসেবে নয় বরং সাধারণ percent চিহ্ন হিসেবেই খোঁজ করবে।
+
+- Equivalent Mysql :
+SELECT * FROM entry WHERE headline LIKE '%\%%';
+
+একইভাবে underscore (_) চিহ্নের ক্ষেত্রেও। Django স্বয়ংক্রিয়ভাবে % এবং _ দুটোই escape করে দেয়, যাতে এগুলোকে সাধারণ অক্ষরের মতোই ব্যবহার করা যায়.

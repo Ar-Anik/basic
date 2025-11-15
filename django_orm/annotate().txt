@@ -1,0 +1,62 @@
+-> annotate() is used to add extra calculated fields to each record (or group of records) in a QuerySet.
+
+-> annotate() function most of the time work with values() function. annotate() function mainly group by a specific
+column and calculate aggregate function values of other column.
+
+-> When we use annotate() without values(), Django automatically groups data by the main model’s primary key (id).
+
+-> When we use annotate(), Django builds a query that adds extra computed fields to each result. That computed field
+can come from:
+- An aggregate function (Sum, Count, etc.)
+- Or an expression (F(), Case, When, Value, etc.)
+
+So if we use an expression instead of an aggregate, Django still adds the computed column.
+
+-> When we use annotate() after values(), Django first groups the records based on the fields listed in values().
+Then, it calculates the aggregate values for each group — just like SQL’s GROUP BY.
+
+# Example-1
+>>> result = Blog.objects.annotate(total_entries=Count('entries'))
+>>> print(result[0].name, result[0].total_entries)
+Tech World 2
+
+Here, Django groups by each Blog automatically. Then Count("entry") counts how many Entry records are related to that blog.
+
+-- Equivalent Mysql
+SELECT blog.id, blog.name, COUNT(entry.id) AS total_entries
+FROM blog
+LEFT JOIN entry ON blog.id = entry.blog_id
+GROUP BY blog.id;
+
+
+# Example-2
+>>> result = Blog.objects.annotate(total_comments=Sum('entries__number_of_comments'))
+>>> print(result[0].name, result[0].total_comments)
+Tech World 35
+
+
+# Example-3
+>>> Entry.objects.values("pub_date__year").annotate(total_entry=Count("id"))
+<QuerySet [{'pub_date__year': 2025, 'total_entry': 4}]>
+
+Here, .values("pub_date__year") → extract year from pub_date and .annotate(total=Count("id")) → group by year and count entries
+
+-- Equivalent Mysql
+SELECT YEAR(pub_date) AS pub_date__year, COUNT(id) AS total_entry
+FROM entry
+GROUP BY YEAR(pub_date);
+
+
+# Example-4
+>>> Entry.objects.values("blog__id").annotate(total_commets=Sum('number_of_comments'), avg_rating=Avg('rating'))
+<QuerySet [{'blog__id': 1, 'total_commets': 35, 'avg_rating': 26.0}, {'blog__id': 2, 'total_commets': 3, 'avg_rating': 3.0}, {'blog__id': 3, 'total_commets': 3, 'avg_rating': 5.0}]>
+
+
+# Example-5
+>>> result = Blog.objects.annotate(total_comments=Sum('entries__number_of_comments')).order_by('-total_comments')
+>>> print(result[0].name, result[0].total_comments)
+Tech World 35
+>>> print(result[1].name, result[1].total_comments)
+Food Paradise 3
+>>> print(result[2].name, result[2].total_comments)
+Wanderlust 3

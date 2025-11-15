@@ -1,0 +1,29 @@
+-> contained_by হলো Django-এর JSONField-এর একটি lookup, যা contains এর বিপরীতভাবে কাজ করে।
+
+contained_by JSONField এ key-value pair আকারে subset দ্বারা filter or query করার কাজে ব্যবহৃত হয়. query বা filter করার সময়
+যে key-value pair দেওয়া হয়, এই key-value pair যে সব set এর subset সে সকল set return করে contained_by.
+
+N.B.: Empty/ফাঁকা set সকল set এর subset.
+
+# Example
+>>> from json_app.models import Dogi
+
+-- object create
+>>> Dogi.objects.create(name='hasina', data={'breed': 'bal', 'owner': 'bangladesh'})
+>>> Dogi.objects.create(name='khaleda', data={'breed': 'bnp', 'owner': 'bangladesh'})
+>>> Dogi.objects.create(name='ncp', data={})
+>>> Dogi.objects.create(name='trump', data={'breed': 'america', 'tricks': ['kill', 'fight']})
+
+-- query
+>>> Dogi.objects.filter(data__contained_by={'breed': 'bnp', 'owner': 'bangladesh'})
+<QuerySet [<Dogi: khaleda>, <Dogi: ncp>]>
+
+>>> Dogi.objects.filter(data__contained_by={'breed': 'bal', 'owner': 'bangladesh'})
+<QuerySet [<Dogi: hasina>, <Dogi: ncp>]>
+
+>>> Dogi.objects.filter(data__contained_by={'breed': 'bnp'})     # beacuse only {'breed': 'bnp'} not subset of any other set.
+<QuerySet [<Dogi: ncp>]>
+
+>>> Dogi.objects.filter(data__contained_by={'breed': 'america', 'tricks':['kill', 'fight']})
+<QuerySet [<Dogi: ncp>, <Dogi: trump>]>
+

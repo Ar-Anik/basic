@@ -1,0 +1,73 @@
+-> Subquery() is a class in django.db.models used to represent a SQL subquery that can be embedded inside another query.
+It allows us to use the result of one queryset inside another queryset.
+
+# In raw SQL, we can write queries like:
+SELECT id, name, (
+    SELECT COUNT(*) FROM entry WHERE entry.blog_id = blog.id
+) AS total_entries
+FROM blog;
+
+Subquery() allows us to do this same thing using Django ORM, safely and efficiently.
+
+# Path and Syntax
+from django.db.models import OuterRef, Subquery
+- Subquery(): Wraps another queryset.
+- OuterRef(): Refers to the field from the outer queryset (like blog.id in SQL).
+
+-> OuterRef()
+- OuterRef is used inside a subquery to reference a field from the outer query.
+
+It acts like a “bridge” between:
+- the outer query (e.g., each Blog row)
+- and the inner subquery (e.g., entries related to that blog)
+Without OuterRef(), the subquery has no way to know which outer row it should relate to.
+
+# Think of:
+- The outer query = “We’re looping through all blogs.”
+- The inner subquery = “For this specific blog, get its latest entry.”
+
+To make the inner query understand which blog we’re talking about, we use: OuterRef('pk')
+
+This tells Django: “Inside this subquery, use the primary key (pk) of the current outer blog row.”
+
+# Example-1
+>>> qry = Entry.objects.filter(blog=OuterRef('pk')).values('headline')[:1]
+>>> blogs = Blog.objects.annotate(latest_headline=Subquery(qry))
+
+>>> for b in blogs:
+...   print(b.name, "--",  b.latest_headline)
+
+Tech World -- AI Revolution 2025
+Food Paradise -- Top 10 Pasta Recipes
+Wanderlust -- Wanderlust Travel Guide
+
+- Equivalent Mysql
+SELECT blog.id, blog.name,
+   (SELECT entry.headline
+    FROM entry
+    WHERE entry.blog_id = blog.id
+    ORDER BY entry.pub_date DESC
+    LIMIT 1) AS latest_headline
+FROM blog;
+
+Here, entry.blog_id = blog.id — this connection exists because of OuterRef('pk').
+
+# Example-2
+>>> latest_date = Entry.objects.filter(blog=OuterRef('pk')).order_by('-pub_date').values('pub_date')[:1]
+>>> blogs = Blog.objects.annotate(latest_date=Subquery(latest_date))
+
+>>> for b in blogs:
+...   print(b.name, '--', b.latest_date)
+
+Tech World -- 2025-10-01
+Food Paradise -- 2025-09-20
+Wanderlust -- 2025-09-10
+
+# Example-3
+>>> rating_qry = Entry.objects.filter(blog=OuterRef('pk')).order_by('-pub_date').values('rating')[:1]
+>>> high_quality_blogs = Blog.objects.annotate(latest_rating=Subquery(rating_qry)).filter(latest_rating__gt=8)
+
+>>> for b in high_quality_blogs:
+...   print(b.name, '--', b.latest_rating)
+
+Tech World -- 22

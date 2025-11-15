@@ -1,0 +1,71 @@
+# Reference many_to_many project in local
+
+Q : What is a Many-to-Many Relationship?
+-> A Many-to-Many relationship means:
+- One record in model A can be related to multiple records in model B.
+- And one record in model B can also be related to multiple records in model A.
+
+# Example in real life:
+A Person can join many Groups and a Group can have many Persons.
+
+
+# Basic Syntax
+from django.db import models
+
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+
+class Group(models.Model):
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(Person)
+
+Here, The field members inside Group creates a many-to-many link with Person. Django automatically creates an
+intermediate table (hidden) in the database, typically named <app>_<model1>_<model2>.
+For the above example, the auto-created table might be:
+appname_group_members (
+    id,
+    group_id,
+    person_id
+)
+
+
+# Basic Query
+>>> from basic.models import Person, Group
+>>> p1 = Person.objects.create(name='Anik')
+>>> p2 = Person.objects.create(name='Sourov')
+>>> g = Group.objects.create(name='Music Club')
+
+# add
+>>> g.members.add(p1, p2)
+
+# remove
+>>> g.members.remove(p1)
+>>> g.members.values()
+<QuerySet [{'id': 2, 'name': 'Sourov'}]>
+
+
+>>> p3 = Person.objects.create(name='Joy')
+>>> p4 = Person.objects.create(name='Oni')
+
+# set
+>>> g.members.set([p1, p2, p3, p4])
+
+>>> g.members.values()
+<QuerySet [{'id': 1, 'name': 'Anik'}, {'id': 2, 'name': 'Sourov'}, {'id': 3, 'name': 'Joy'}, {'id': 4, 'name': 'Oni'}]>
+>>> g.members.all()
+<QuerySet [<Person: Person object (1)>, <Person: Person object (2)>, <Person: Person object (3)>, <Person: Person object (4)>]>
+
+# group_set is the reverse relationship name Django creates automatically, if no related_name is defined.
+# reverse name common pattern, <model_name>_set
+>>> p1.group_set.values()
+<QuerySet [{'id': 1, 'name': 'Music Club'}]>
+
+>>> g2 = Group.objects.create(name='Sports Club')
+>>> g2.members.set([p1, p4])
+>>> p1.group_set.values()
+<QuerySet [{'id': 1, 'name': 'Music Club'}, {'id': 2, 'name': 'Sports Club'}]>
+
+# clear
+>>> g2.members.clear()
+>>> g2.members.all()
+<QuerySet []>

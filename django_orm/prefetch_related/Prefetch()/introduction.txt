@@ -1,0 +1,83 @@
+Q : What is Prefetch() in Django?
+-> Prefetch() হলো Django ORM-এর একটি helper class যেটি prefetch_related()–কে customized prefetching-এর নির্দেশ দেয়।
+
+এটি ব্যবহৃত হয় যখন—
+1. কাস্টম queryset ব্যবহার করতে (related objects কিভাবে আনা হবে সেটা নিয়ন্ত্রণ করতে)
+2. prefetch করা data অন্য(custom) attribute-এ রাখতে (যেমন: to_attr='active_authors')
+3. complex nested prefetch করতে (one-to-many / many-to-many / reverse FK / GenericRelation)
+
+# Basic Syntax
+from django.db.models import Prefetch
+
+Prefetch(
+    lookup,             # string: related field name e.g. 'authors'
+    queryset=None,      # optional custom queryset
+    to_attr=None        # optional attribute name to store results
+)
+
+# Example
+>>> from django.db.models import Prefetch
+>>> from prefetch_related.models import Author, Book
+>>> books = Book.objects.prefetch_related(Prefetch('authors', queryset=Author.objects.filter(is_active=True)))
+>>> books
+<QuerySet [<Book: Python Basics>, <Book: Advanced Django>]>
+>>> books.__dict__
+{'model': <class 'prefetch_related.models.Book'>, '_db': None, '_hints': {}, '_query': <django.db.models.sql.query.Query object at 0x102a3a570>, '_result_cache': None, '_sticky_filter': False, '_for_write': False, '_prefetch_related_lookups': (<django.db.models.query.Prefetch object at 0x102ae8440>,), '_prefetch_done': False, '_known_related_objects': {}, '_iterable_class': <class 'django.db.models.query.ModelIterable'>, '_fields': None, '_defer_next_filter': False, '_deferred_filter': None}
+
+>>> for book in books:
+...    for authors in book.authors.all():
+...       print(book.title, '-', authors.name)
+...
+Advanced Django - Rafi
+
+>>> from django.db import connection, reset_queries
+>>> reset_queries()
+>>> books = Book.objects.prefetch_related(Prefetch('authors', queryset=Author.objects.filter(is_active=True), to_attr='active_authors'))
+
+---------- don't call all after use to_attr, because it hit database ----
+>>> for book in books:
+...   for author in book.authors.all():
+...      print(book.title, '-', author.name)
+...
+Python Basics - Anik
+Python Basics - Nadia
+Advanced Django - Rafi
+Advanced Django - Nadia
+
+>>> for q in connection.queries:
+...  print(q['sql'])
+...
+SELECT `prefetch_related_book`.`id`, `prefetch_related_book`.`title` FROM `prefetch_related_book`
+SELECT (`prefetch_related_book_authors`.`book_id`) AS `_prefetch_related_val_book_id`, `prefetch_related_author`.`id`, `prefetch_related_author`.`name`, `prefetch_related_author`.`is_active` FROM `prefetch_related_author` INNER JOIN `prefetch_related_book_authors` ON (`prefetch_related_author`.`id` = `prefetch_related_book_authors`.`author_id`) WHERE (`prefetch_related_author`.`is_active` = 1 AND `prefetch_related_book_authors`.`book_id` IN (1, 2))
+SELECT `prefetch_related_author`.`id`, `prefetch_related_author`.`name`, `prefetch_related_author`.`is_active` FROM `prefetch_related_author` INNER JOIN `prefetch_related_book_authors` ON (`prefetch_related_author`.`id` = `prefetch_related_book_authors`.`author_id`) WHERE `prefetch_related_book_authors`.`book_id` = 1
+SELECT `prefetch_related_author`.`id`, `prefetch_related_author`.`name`, `prefetch_related_author`.`is_active` FROM `prefetch_related_author` INNER JOIN `prefetch_related_book_authors` ON (`prefetch_related_author`.`id` = `prefetch_related_book_authors`.`author_id`) WHERE `prefetch_related_book_authors`.`book_id` = 2
+--------------------------------------------------------------------------
+
+>>> reset_queries()
+>>> books = Book.objects.prefetch_related(Prefetch('authors', queryset=Author.objects.filter(is_active=True), to_attr='active_authors'))
+
+>>> for book in books:
+...   for author in book.active_authors:
+...       print(book.title, '-', author.name)
+...
+Advanced Django - Rafi
+
+>>> for q in connection.queries:
+...   print(q['sql'])
+...
+SELECT `prefetch_related_book`.`id`, `prefetch_related_book`.`title` FROM `prefetch_related_book`
+SELECT (`prefetch_related_book_authors`.`book_id`) AS `_prefetch_related_val_book_id`, `prefetch_related_author`.`id`, `prefetch_related_author`.`name`, `prefetch_related_author`.`is_active` FROM `prefetch_related_author` INNER JOIN `prefetch_related_book_authors` ON (`prefetch_related_author`.`id` = `prefetch_related_book_authors`.`author_id`) WHERE (`prefetch_related_author`.`is_active` = 1 AND `prefetch_related_book_authors`.`book_id` IN (1, 2))
+
+>>> books.__dict__
+{'model': <class 'prefetch_related.models.Book'>, '_db': None, '_hints': {}, '_query': <django.db.models.sql.query.Query object at 0x102aa6c10>, '_result_cache': [<Book: Python Basics>, <Book: Advanced Django>], '_sticky_filter': False, '_for_write': False, '_prefetch_related_lookups': (<django.db.models.query.Prefetch object at 0x102af48a0>,), '_prefetch_done': True, '_known_related_objects': {}, '_iterable_class': <class 'django.db.models.query.ModelIterable'>, '_fields': None, '_defer_next_filter': False, '_deferred_filter': None}
+
+
+>>> for book in books:
+...   book.__dict__
+...   for author in book.active_authors:
+...       print(book.title, '-', author.name)
+...
+{'_state': <django.db.models.base.ModelState object at 0x1029f58d0>, 'id': 1, 'title': 'Python Basics', '_prefetched_objects_cache': {}, 'active_authors': []}
+{'_state': <django.db.models.base.ModelState object at 0x102acdd90>, 'id': 2, 'title': 'Advanced Django', '_prefetched_objects_cache': {}, 'active_authors': [<Author: Rafi>]}
+Advanced Django - Rafi
+

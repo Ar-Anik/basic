@@ -1,0 +1,60 @@
+Django-তে অনেক সময় এমন পরিস্থিতি আসে, যেখানে একটি নির্দিষ্ট শর্ত অনুযায়ী একসাথে একাধিক অবজেক্টের মান পরিবর্তন (update) করতে হয়।
+এই কাজটি করার জন্য Django প্রদান করে একটি খুবই কার্যকর মেথড — .update()। update() হলো bulk update-এর জন্য একটি দ্রুত, সরাসরি
+SQL-ভিত্তিক অপারেশন।
+
+ধরা যাক, আমরা সব Entry অবজেক্টের মধ্যে যেগুলোর pub_date 2023 সালের, তাদের headline ফিল্ডের মান একই করতে চাই।
+>>> Entry.objects.filter(pub_date__year=2023).update(headline='Everything is the same')
+এই স্টেটমেন্টটি সরাসরি ডাটাবেজে গিয়ে SQL UPDATE কমান্ড চালায়, অর্থাৎ Django প্রতিটি অবজেক্টকে আলাদা করে লোড করে না বরং একবারেই সবগুলো
+রেকর্ড আপডেট করে দেয়।
+
+# update() মেথড দিয়ে শুধুমাত্র নিম্নলিখিত ধরনের ফিল্ড আপডেট করা যায়:
+    - Non-relation field — যেমন headline, title, price ইত্যাদি সাধারণ ফিল্ড।
+    - ForeignKey field — অর্থাৎ অন্য মডেলের রেফারেন্স।
+
+# Example ForeignKey Update
+>>> b = Blog.objects.get(pk=1)
+>>> Entry.objects.update(blog=b)
+
+এখানে, সব Entry অবজেক্ট এখন Blog(pk=1) এর সাথে যুক্ত হয়ে যাবে।
+
+# Return Value
+update() মেথড তাৎক্ষণিকভাবে ডাটাবেজে পরিবর্তন করে এবং একটি সংখ্যা রিটার্ন করে — যেটি নির্দেশ করে কয়টি row ম্যাচ করেছে।
+
+- Example
+>>> updated_rows = Entry.objects.filter(blog=b).update(headline="Everything is the same")
+>>> print(updated_rows)
+
+তবে মনে রাখতে হবে — সব ম্যাচ করা রো-ই আপডেট হয়েছে, এমন নিশ্চয়তা নেই। কারণ কিছু রো হয়তো আগে থেকেই ঐ মানটি ধারণ করছিল।
+
+# আপডেট কেবল Main Model টেবিলে হয়
+update() কেবলমাত্র মডেলের main table এ আপডেট করতে পারে। আপনি চাইলে related field দিয়ে ফিল্টার করতে পারেন, কিন্তু আপডেট হবে
+শুধুমাত্র ঐ মডেলের কলামগুলিতে। Example :
+>>> b = Blog.objects.get(pk=1)
+>>> Entry.objects.filter(blog=b).update(headline="Everything is the same")
+
+এখানে blog দিয়ে ফিল্টার করা হয়েছে, কিন্তু আপডেট হয়েছে শুধু Entry মডেলের headline ফিল্ডে।
+
+# update() ব্যবহার করলে Django:
+    - save() মেথড কল করে না
+    - pre_save বা post_save signal পাঠায় না
+    - auto_now অপশনও ট্রিগার হয় না।
+অর্থাৎ, এটি সরাসরি SQL চালিয়ে দেয় — কোনো Python level process চালানো হয় না। যদি প্রত্যেক অবজেক্টে save() চালানো প্রয়োজন হয়, তাহলে
+লুপ ব্যবহার করতে হবে:
+
+for item in my_queryset:
+    item.save()
+
+
+# F() expression দিয়ে আপডেট
+update() মেথডে F() expression ব্যবহার করা যায়, যাতে একটি ফিল্ডের মান আরেক ফিল্ডের বর্তমান মানের উপর ভিত্তি করে পরিবর্তন করা যায়।
+>>> from django.db.models import F
+>>> Entry.objects.update(number_of_pingbacks=F('number_of_pingbacks')+1)
+16
+এতে প্রতিটি Entry অবজেক্টের number_of_pingbacks মান ১ করে বেড়ে যাবে।
+
+# limitation — Join ব্যবহার করা যায় না
+F() expression দিয়ে আপডেট করার সময় join তৈরি করা যায় না। অর্থাৎ, আপনি অন্য মডেলের ফিল্ড (related field) ব্যবহার করে আপডেট
+করতে পারবেন না। Example :
+
+>>> Entry.objects.update(headline=F("blog__name"))
+django.core.exceptions.FieldError: Joined field references are not permitted in this query

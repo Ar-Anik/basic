@@ -1,0 +1,96 @@
+Q : KT() কী?
+-> KT() (KeyTextTransform) হলো Django ORM-এর একটি expression class যা JSONField-এর নির্দিষ্ট key বা path-এর টেক্সট মান fetch করতে
+ব্যবহৃত হয়।
+- এটি সরাসরি ডাটাবেসের JSON key থেকে string আকারে মান return করে.
+
+Q : KT() কোথায় Use হয়?
+- যখন JSONField-এর কোনো key-এর মান দ্বারা query, filter বা annotate করতে হয়
+- বিশেষ করে যখন nested key-এর মান fetch করতে হয়
+
+KT মূলত JSONField lookup chain-এর path ধরে key-এর টেক্সট মান fetch করতে ব্যবহৃত হয়। double underscore (__) ব্যবহার করে nested
+key-এ যাওয়া যায়।
+
+
+# insert in table
+>>> from django.db.models.fields.json import KT
+Product.objects.create(
+    name="Galxy A52",
+    info={
+        "details": {
+            "ram": ["120GB", "8GB"],
+            "brand": "Samsung",
+            "price": {"value": 35000, "currency": "BDT"},
+            "colors": ["Black", "Blue", "White"]
+        }
+    }
+)
+
+Product.objects.create(
+    name="iPhone 13",
+    info={
+        "details": {
+            "ram": ["88GB", "4GB"],
+            "brand": "Apple",
+            "price": {"value": 100000, "currency": "BDT"},
+            "colors": ["Red", "White", "Midnight"]
+        }
+    }
+)
+
+Product.objects.create(
+    name="Redmi Note 12",
+    info={
+        "details": {
+            "ram": ["64GB", "6GB"],
+            "brand": "Xiaomi",
+            "price": {"value": 25000, "currency": "BDT"},
+            "colors": ["Gray", "Blue"]
+        }
+    }
+)
+
+Product.objects.create(
+    name="iPhone 14",
+    info={
+        "details": {
+            "ram": ["128GB", "4GB"],
+            "brand": "Apple",
+            "price": {"value": 150000, "currency": "BDT"},
+            "colors": ["Pink", "White", "Black"]
+        }
+    }
+)
+
+
+# Example-1
+>>> Product.objects.annotate(brand_text=KT('info__details__brand'))
+<QuerySet [<Product: Galxy A52>, <Product: iPhone 13>, <Product: Redmi Note 12>, <Product: iPhone 14>]>
+
+>>> Product.objects.annotate(brand_text=KT('info__details__brand')).values('name', 'brand_text')
+<QuerySet [{'name': 'Galxy A52', 'brand_text': 'Samsung'}, {'name': 'iPhone 13', 'brand_text': 'Apple'}, {'name': 'Redmi Note 12', 'brand_text': 'Xiaomi'}, {'name': 'iPhone 14', 'brand_text': 'Apple'}]>
+
+এখানে KT('info__details__brand') → info JSON ফিল্ডের ভেতরে থাকা details → brand key-এর text value fetch হচ্ছে।
+
+# Example-2 (index access)
+>>> Product.objects.annotate(first_ram=KT('info__details__ram')).values('name', 'first_ram')
+<QuerySet [{'name': 'Galxy A52', 'first_ram': '["120GB", "8GB"]'}, {'name': 'iPhone 13', 'first_ram': '["88GB", "4GB"]'}, {'name': 'Redmi Note 12', 'first_ram': '["64GB", "6GB"]'}, {'name': 'iPhone 14', 'first_ram': '["128GB", "4GB"]'}]>
+
+>>> Product.objects.annotate(first_ram=KT('info__details__ram__0')).values('name', 'first_ram')
+<QuerySet [{'name': 'Galxy A52', 'first_ram': '120GB'}, {'name': 'iPhone 13', 'first_ram': '88GB'}, {'name': 'Redmi Note 12', 'first_ram': '64GB'}, {'name': 'iPhone 14', 'first_ram': '128GB'}]>
+
+# Example-3 (nested json key)
+>>> Product.objects.annotate(price_value=KT('info__details__price__value')).values('name', 'price_value')
+<QuerySet [{'name': 'Galxy A52', 'price_value': '35000'}, {'name': 'iPhone 13', 'price_value': '100000'}, {'name': 'Redmi Note 12', 'price_value': '25000'}, {'name': 'iPhone 14', 'price_value': '150000'}]>
+
+# Mysql Not Support this type of filter after KT()
+Dog.objects.annotate( first_breed=KT("data__breed__1"), owner_name=KT("data__owner__name")).filter(first_breed__startswith="lhasa", owner_name="Bob")
+<QuerySet [<Dog: Shep>]>
+
+# Example-5 (Multiple KT)
+>>> Product.objects.annotate(
+    brand_text=KT('info__details__brand'),
+    second_ram=KT('info__details__ram__1'),
+    price_value=KT('info__details__price__value')
+)
+<QuerySet [<Product: Galxy A52>, <Product: iPhone 13>, <Product: Redmi Note 12>, <Product: iPhone 14>]>
+

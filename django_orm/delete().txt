@@ -1,0 +1,63 @@
+# Reference delete app in orm practice project
+
+-> delete() মেথডটি যখন কোনো অবজেক্টের উপর চালানো হয় (যেমন e1.delete()), তখন object টি এবং তার সাথে সম্পর্কিত অন্য object
+গুলোকেও (যেগুলো ForeignKey, ManyToManyField ইত্যাদির মাধ্যমে যুক্ত) ডাটাবেস থেকে remove করে দেয়।
+
+এবং এটি দুটি জিনিস রিটার্ন করে:
+- মোট কতগুলো object delete হয়েছে,
+- প্রতিটি Model অনুযায়ী কতগুলো object delete হয়েছে তার একটি dictionary.
+
+>>> e1 = Entry.objects.get(pk=1)
+>>> e1.delete()
+(3, {'delete.Entry_authors': 2, 'delete.Entry': 1})
+
+# (3, {'delete.Entry_authors': 2, 'delete.Entry': 1}) এর মানে হলো —
+1. মোট ৩টি রেকর্ড ডিলিট হয়েছে।
+2. dictionary তে বিস্তারিত ভাবে বলা হয়েছে কোন Model থেকে কতটি Record(row) delete হয়েছে:
+    - 'delete.Entry_authors': 2 → Many-to-Many relation এর জন্য Django একটি intermediate table তৈরি করে, এই Intermidiate
+       table এর ২টি row delete হয়েছে.
+    - 'delete.Entry': 1 → মূল Entry অবজেক্টটি নিজেই ১টি Record হিসেবে delete হয়েছে.
+
+
+# Bulk Delete
+প্রতিটি QuerySet অবজেক্টের একটি delete() মেথড থাকে। যখন এই মেথডটি চালানো হয়, তখন ঐ QuerySet-এর মধ্যে থাকা সবগুলো অবজেক্ট
+ডাটাবেস থেকে delete হয়ে যায়।
+
+>>> Entry.objects.filter(pub_date__year=2021).delete()
+(6, {'delete.Entry_authors': 4, 'delete.Entry': 2})
+
+delete() method QuerySet-এর সব অবজেক্ট একসাথে delete করে ফেলছে। মোট 6টি রেকর্ড delete হয়েছে, Entry_authors থেকে 4টি,
+Entry থেকে 2টি object delete হয়েছে।
+
+-> এই bulk delete কাজটি যতটা সম্ভব সরাসরি SQL কমান্ড দিয়ে করা হয়। অর্থাৎ Django ডাটাবেসে সরাসরি DELETE FROM ... চালিয়ে দেয়।
+ফলে, প্রতিটি অবজেক্টের delete() মেথড আলাদাভাবে কল করা হয় না। এটি কেবল ডাটাবেস স্তরে রেকর্ডগুলো মুছে দেয়।
+
+যদি কোনো মডেলের ভেতরে কাস্টমভাবে নিজের delete() মেথড লেখা থাকে (যেমন কোনো বিশেষ কাজ করার জন্য), তবে bulk delete ব্যবহারে সেই
+custom delete() method স্বয়ংক্রিয়ভাবে call হবে না।
+
+যদি নিশ্চিত হতে হয় যে প্রতিটি অবজেক্টের কাস্টম delete() মেথড চালানো হবে, তাহলে bulk delete ব্যবহার না করে একটা করে অবজেক্ট ডিলিট
+করতে হবে। Example :
+for entry in Entry.objects.filter(pub_date__year=2005):
+    entry.delete()
+
+-> Django-তে যখন কোনো অবজেক্ট delete করা হয়, তখন সেটি ডিফল্টভাবে SQL-এর ON DELETE CASCADE constraint আচরণ follow করে।
+Entry মডেলে একটি ForeignKey আছে Blog-এর :
+    blog = models.ForeignKey(Blog, on_delete=models.CASCADE, related_name='entry')
+
+on_delete=models.CASCADE থাকার কারণে যখন Blog অবজেক্টটি ডিলিট করা হবে, তখন Blog-এর সাথে যুক্ত সব Entry object ও
+automatically delete হয়ে যাবে। এটাই cascade delete behavior।
+
+>>> b1 = Blog.objects.get(pk=1)
+>>> b1.delete()
+(4, {'delete.Entry_authors': 2, 'delete.Entry': 1, 'delete.Blog': 1})
+
+
+# delete() হলো একমাত্র QuerySet মেথড যেটি object Manager এর মাধ্যমে Access করা যায় না। এটি Django-র একটি safety
+mechanism. যাতে কেউ ভুলবশত delete না করে ফেলে like :
+    Entry.objects.delete()      # not valid
+
+
+# All object delete
+>>> Entry.objects.all().delete()
+(3, {'delete.Entry_authors': 2, 'delete.Entry': 1})
+

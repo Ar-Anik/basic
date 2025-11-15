@@ -1,0 +1,213 @@
+-> prefetch_related_objects(instances, *lookups) একটি function, এই function-এ argument হিসাবে দেওয়া model instance গুলোর
+জন্য নির্দিষ্ট related field গুলোর (ManyToMany, reverse FK, GenericRelation ইত্যাদি) data eagerly ডাটাবেস থেকে নিয়ে আসে(queryset
+evalute হওয়ার আগে).
+এবং প্রতিটি instance-এ সেই related ডেটা cached করে রাখে — ফলে পরে সেই related model গুলোর জন্য QuerySet access করলে আর নতুন
+SQL generate হয় না। এটি QuerySet-এর lazy behaviour change করে দেয়(only evaluation এর সময় execution) সবকিছু মেমরিতে eagerly
+লোড করে রাখে।
+
+
+Q : How prefetch_related_objects(instances, *lookups) Works?
+Let’s say we have:
+    instances = [pizza1, pizza2, pizza3]
+    lookups = ['toppings']
+
+Now Django’s internal function prefetch_related_objects(instances, lookups) performs the following steps:
+# Step-1: Input Validation and Preparation
+- Django first checks that the given instances list is not empty and that all the objects belong to the same model class.
+- It validates the lookups — which can be:
+    * a simple string like 'toppings' or
+    * a Prefetch object (for custom queryset or to_attr mapping).
+- Django prepares a list of lookups to process.
+
+# Step 2: Collect Primary Keys of the Given Instances
+- It collects the primary keys (PKs) from each object in instances. Example:
+    pks = [1, 2, 3]
+- These PKs will be used to fetch all related objects in one or few SQL queries.
+
+# Step 3: Prepare Separate SQL Queries for Each Lookup
+For each lookup (like 'toppings'), Django figures out what kind of relation it is:
+
+1. If it’s a ManyToManyField
+- It constructs a query similar to:
+SELECT toppings.*, pizza_toppings.pizza_id
+FROM toppings INNER JOIN pizza_toppings
+    ON toppings.id = pizza_toppings.topping_id
+WHERE pizza_toppings.pizza_id IN (1, 2, 3);
+
+2. If it’s a reverse ForeignKey relationship (one-to-many)
+It builds a query like: SELECT * FROM related_table WHERE fk_field IN (1, 2, 3);
+
+3. If the lookup is a custom Prefetch(), Django uses the custom queryset provided by the developer.
+
+# Step 4: Execute SQL Queries Immediately (Eager Loading)
+1. Django executes each query immediately (this is eager evaluation).
+2. That means the related objects are fetched right when prefetch_related_objects() is called, not lazily later.
+
+# Step 5: Group the Fetched Related Objects in Python
+- Once the related objects are fetched, Django groups them by their related key.
+For example :  after fetching toppings, it might build a mapping like:
+    {
+        1: [ham, pineapple],
+        2: [prawns, smoked_salmon],
+        3: [mushroom, capsicum]
+    }
+
+Here, the dictionary keys are the Pizza IDs.
+
+# Step 6: Attach Prefetched Data to Each Instance
+For each instance (pizza1, pizza2, pizza3), Django attaches the prefetched data in a private cache:
+pizza1._prefetched_objects_cache = {
+    'toppings': [ham, pineapple]
+}
+
+If a custom attribute was defined using to_attr like: Prefetch('toppings', to_attr='my_toppings')
+Then Django sets:
+    pizza1.my_toppings = [ham, pineapple]
+
+# Step 7: Benefit During Later Access
+Now when we later call: pizza1.toppings.all()
+Django does not run a new SQL query. Instead it finds the results directly in:
+    pizza1._prefetched_objects_cache['toppings']
+
+So all subsequent related lookups are served from memory not the database.
+
+
+# Reference orm_practice project prefetch_related_object apps
+-> Example :
+>>> from prefetch_related_object.models import Topping, Pizza
+>>> from django.db import connection, reset_queries
+>>> from django.db.models.query import prefetch_related_objects
+
+>>> reset_queries()
+
+>>> t1 = Topping.objects.create(name='Cheese')
+>>> t2 = Topping.objects.create(name='Tomato')
+>>> t3 = Topping.objects.create(name='Olive')
+
+>>> p1 = Pizza.objects.create(name='Margherita')
+>>> p2 = Pizza.objects.create(name='Veggie')
+
+>>> p1.toppings.add(t1, t2)
+>>> p2.toppings.add(t1, t3)
+
+>>> reset_queries()
+
+>>> pizzas = list(Pizza.objects.all())
+>>> for p in pizzas:
+...   for topp in p.toppings.all():
+...      _ = topp.name
+
+>>> print("Queries without prefetch: ", len(connection.queries))
+Queries without prefetch:  3
+
+>>> for q in connection.queries:
+...   print(q['sql'])
+
+SELECT `prefetch_related_object_pizza`.`id`, `prefetch_related_object_pizza`.`name` FROM `prefetch_related_object_pizza`
+SELECT `prefetch_related_object_topping`.`id`, `prefetch_related_object_topping`.`name` FROM `prefetch_related_object_topping` INNER JOIN `prefetch_related_object_pizza_toppings` ON (`prefetch_related_object_topping`.`id` = `prefetch_related_object_pizza_toppings`.`topping_id`) WHERE `prefetch_related_object_pizza_toppings`.`pizza_id` = 1
+SELECT `prefetch_related_object_topping`.`id`, `prefetch_related_object_topping`.`name` FROM `prefetch_related_object_topping` INNER JOIN `prefetch_related_object_pizza_toppings` ON (`prefetch_related_object_topping`.`id` = `prefetch_related_object_pizza_toppings`.`topping_id`) WHERE `prefetch_related_object_pizza_toppings`.`pizza_id` = 2
+
+Here we see N+1 query problem raise. we can solved this by prefetch_related_objects().
+
+>>> reset_queries()
+
+>>> pizzas = list(Pizza.objects.all())
+>>> prefetch_related_objects(pizzas, 'toppings')
+
+Special Note : যদি pizzas কে list() না করে সরাসরি QuerySet object আকারে দেওয়া হয় এবং prefetch_related_objects() call করা হয়
+then Django প্রথমে সেই QuerySet evaluate করে primary results fetch করে তারপর related queries চালায় ফলে primary result cache
+সম্পূর্ণ লোড হয়ে যায়.
+
+>>> for p in pizzas:
+...   print(p.name, [t.name for t in p.toppings.all()])
+
+Margherita ['Cheese', 'Tomato']
+Veggie ['Cheese', 'Olive']
+
+>>> print("Queries with prefetch_related_objects: ", len(connection.queries))
+Queries with prefetch_related_objects:  2
+>>> for q in connection.queries:
+...   print(q['sql'])
+
+SELECT `prefetch_related_object_pizza`.`id`, `prefetch_related_object_pizza`.`name` FROM `prefetch_related_object_pizza`
+SELECT (`prefetch_related_object_pizza_toppings`.`pizza_id`) AS `_prefetch_related_val_pizza_id`, `prefetch_related_object_topping`.`id`, `prefetch_related_object_topping`.`name` FROM `prefetch_related_object_topping` INNER JOIN `prefetch_related_object_pizza_toppings` ON (`prefetch_related_object_topping`.`id` = `prefetch_related_object_pizza_toppings`.`topping_id`) WHERE `prefetch_related_object_pizza_toppings`.`pizza_id` IN (1, 2)
+
+
+-> Prefetch(..., to_attr=...) Used
+- prefetch_related_objects()-এ Prefetch objects দেয়া যায় যাতে কয়েকটি সুবিধা পাওয়া যায় — যেমন custom queryset বা to_attr-এ ফলাফল রাখা:
+
+>>> from prefetch_related_object.models import Topping, Pizza
+>>> from django.db import connection, reset_queries
+>>> from django.db.models.query import prefetch_related_objects
+>>> from django.db.models.query import Prefetch
+
+>>> reset_queries()
+
+>>> pizzas = Pizza.objects.all()
+
+>>> prefetch_related_objects(pizzas, Prefetch('toppings', queryset=Topping.objects.filter(name='Cheese'), to_attr='cheese_tops'))
+
+>>> for q in connection.queries:
+...  print(q['sql'])
+
+SELECT `prefetch_related_object_pizza`.`id`, `prefetch_related_object_pizza`.`name` FROM `prefetch_related_object_pizza`
+SELECT (`prefetch_related_object_pizza_toppings`.`pizza_id`) AS `_prefetch_related_val_pizza_id`, `prefetch_related_object_topping`.`id`, `prefetch_related_object_topping`.`name` FROM `prefetch_related_object_topping` INNER JOIN `prefetch_related_object_pizza_toppings` ON (`prefetch_related_object_topping`.`id` = `prefetch_related_object_pizza_toppings`.`topping_id`) WHERE (`prefetch_related_object_topping`.`name` = 'Cheese' AND `prefetch_related_object_pizza_toppings`.`pizza_id` IN (1, 2))
+
+>>> for p in pizzas:
+...   print(p.name, [t.name for t in getattr(p, 'cheese_tops', [])])
+...
+Margherita ['Cheese']
+Veggie ['Cheese']
+
+>>> Prefetch('toppings', queryset=Topping.objects.filter(name='Cheese'), to_attr='cheese_tops').__dict__
+{'prefetch_through': 'toppings', 'prefetch_to': 'cheese_tops', 'queryset': <QuerySet [<Topping: Cheese>]>, 'to_attr': 'cheese_tops'}
+
+
+--> Internal attribute for Cache Data
+- Django সাধারণত instance-এর মধ্যে _prefetched_objects_cache নামক dict ব্যবহার করে। Example :
+    instance._prefetched_objects_cache['toppings']  # contains cached related queryset/list
+- যদি to_attr ব্যবহার করা হয় তাহলে instance.to_attr_name এ সেভ করে।
+
+-> prefetch_related() (QuerySet method) vs prefetch_related_objects() (function)
+> prefetch_related()
+1. Where it is used:
+- Called directly on a QuerySet, like this:
+    pizzas = Pizza.objects.prefetch_related('toppings')
+
+2. When it runs:
+- It’s lazy — Django won’t hit the database immediately.
+- It runs the main query and related queries only when the QuerySet is evaluated (e.g., when iterating over it, converting to list, etc.).
+
+3. How it works:
+- Runs one query for the main model (e.g., Pizza).
+- Runs one query for each related lookup (e.g., Topping).
+- Joins the results in Python and stores related objects in cache for each instance.
+
+4. Best use case:
+- When fetching data from the database through QuerySets (like in views).
+- Supports QuerySet chaining (you can combine filters, etc.).
+- More memory-efficient if the dataset isn’t too large.
+
+> prefetch_related_objects()
+1. Where it is used:
+- Called on an iterable of model instances, not on a QuerySet. Example:
+>>> from django.db.models import prefetch_related_objects
+
+>>> pizzas = list(Pizza.objects.all())   # already loaded
+>>> prefetch_related_objects(pizzas, 'toppings')
+
+2. When it runs:
+- It’s eager — Django immediately executes all queries at the time the function is called.
+
+3. How it works:
+- Takes existing instances in memory (e.g., [pizza1, pizza2, pizza3]).
+- Collects their primary keys.
+- Runs queries for each specified relation (like toppings).
+- Groups the related objects in Python and fills the internal _prefetched_objects_cache for each instance.
+
+4. Best use case:
+- When instances are already loaded in memory (from cache, session, or other sources).
+- We want to pre-load all related data in one go without new QuerySet evaluation.
+
+5. Drawback:
+- Since it loads everything immediately, it can use more RAM — the full primary and related result caches are loaded into memory at once.

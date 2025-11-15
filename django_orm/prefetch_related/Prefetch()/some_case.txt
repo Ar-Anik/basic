@@ -1,0 +1,117 @@
+>>> from prefetch_related.models import Topping, Pizza, Restaurant
+>>> from django.db.models import Prefetch
+>>> from django.db import connection, reset_queries
+
+# query-1
+In its simplest form Prefetch is equivalent to the traditional string based lookups:
+>>> reset_queries()
+
+>>> restaurants = Restaurant.objects.prefetch_related(Prefetch("pizzas__toppings"))
+>>> for restaurant in restaurants:
+...   for pizza in restaurant.pizzas.all():
+...      print(pizza.name, '-', [topp.name for topp in pizza.toppings.all()])
+... 
+Margherita - ['Cheese', 'Tomato']
+Pepperoni Feast - ['Cheese', 'Pepperoni']
+Veggie Delight - ['Cheese', 'Tomato', 'Olive']
+Pepperoni Feast - ['Cheese', 'Pepperoni']
+>>> 
+>>> for q in connection.queries:
+...  print(q['sql'])
+... 
+SELECT prefetch_related_restaurant.id, prefetch_related_restaurant.best_pizza_id FROM prefetch_related_restaurant
+SELECT (prefetch_related_restaurant_pizzas.restaurant_id) AS _prefetch_related_val_restaurant_id, prefetch_related_pizza.id, prefetch_related_pizza.name, prefetch_related_pizza.vegetarian FROM prefetch_related_pizza INNER JOIN prefetch_related_restaurant_pizzas ON (prefetch_related_pizza.id = prefetch_related_restaurant_pizzas.pizza_id) WHERE prefetch_related_restaurant_pizzas.restaurant_id IN (1, 2)
+SELECT (prefetch_related_pizza_toppings.pizza_id) AS _prefetch_related_val_pizza_id, prefetch_related_topping.id, prefetch_related_topping.name FROM prefetch_related_topping INNER JOIN prefetch_related_pizza_toppings ON (prefetch_related_topping.id = prefetch_related_pizza_toppings.topping_id) WHERE prefetch_related_pizza_toppings.pizza_id IN (1, 4, 2)
+
+- total 3 queries : 
+    * 1 for restaurant
+    * 1 for pizzas
+    * 1 for toppings
+
+
+# query-2 : Ordering by Custom queryset
+>>> restaurants = Restaurant.objects.prefetch_related(Prefetch('pizzas__toppings', queryset=Topping.objects.order_by('name')))
+
+>>> for restaurant in restaurants:
+...   for pizza in restaurant.pizzas.all():
+...      print(pizza.name, '-', [topp.name for topp in pizza.toppings.all()])
+...
+Margherita - ['Cheese', 'Tomato']
+Pepperoni Feast - ['Cheese', 'Pepperoni']
+Veggie Delight - ['Cheese', 'Olive', 'Tomato']
+Pepperoni Feast - ['Cheese', 'Pepperoni']
+
+
+# query-3 : use select_related() for reduce the number of queries
+>>> reset_queries()
+
+>>> pizzas = Pizza.objects.prefetch_related(Prefetch('restaurants', queryset=Restaurant.objects.select_related('best_pizza')))
+
+>>> for pizza in pizzas:
+...     for restaurant in pizza.restaurants.all():
+...         print("Pizza:", pizza.name)
+...         print("Restaurant:", restaurant.id)
+...         print("Best pizza:", restaurant.best_pizza.name)
+... 
+Pizza: Margherita
+Restaurant: 1
+Best pizza: Margherita
+Pizza: Veggie Delight
+Restaurant: 2
+Best pizza: Veggie Delight
+Pizza: Pepperoni Feast
+Restaurant: 1
+Best pizza: Margherita
+Pizza: Pepperoni Feast
+Restaurant: 2
+Best pizza: Veggie Delight
+
+>>> for q in connection.queries:
+...   print(q['sql'])
+... 
+SELECT prefetch_related_pizza.id, prefetch_related_pizza.name, prefetch_related_pizza.vegetarian FROM prefetch_related_pizza
+SELECT (prefetch_related_restaurant_pizzas.pizza_id) AS _prefetch_related_val_pizza_id, prefetch_related_restaurant.id, prefetch_related_restaurant.best_pizza_id, T4.id, T4.name, T4.vegetarian FROM prefetch_related_restaurant INNER JOIN prefetch_related_restaurant_pizzas ON (prefetch_related_restaurant.id = prefetch_related_restaurant_pizzas.restaurant_id) INNER JOIN prefetch_related_pizza T4 ON (prefetch_related_restaurant.best_pizza_id = T4.id) WHERE prefetch_related_restaurant_pizzas.pizza_id IN (1, 2, 3, 4)
+
+
+# query-4 : in same prefetch_related function we can Prefetch multiple time because of to_attr
+>>> vegetarian_pizzas = Pizza.objects.filter(vegetarian=True)
+>>> Restaurant.objects.prefetch_related(Prefetch('pizzas', to_attr='menu'), Prefetch('pizzas', queryset=vegetarian_pizzas, to_attr='vegetarian_menu'))
+<QuerySet [<Restaurant: Restaurant object (1)>, <Restaurant: Restaurant object (2)>]>
+
+
+# query-5
+Lookups created with custom to_attr can still be traversed as usual by other lookups:
+>>> reset_queries()
+>>> restaurants = Restaurant.objects.prefetch_related(Prefetch('pizzas', queryset=vegetarian_pizzas, to_attr='vegetarian_menu'), 'vegetarian_menu__toppings')
+>>> for restaurant in restaurants:
+...     print(restaurant.id)
+...     for pizza in restaurant.vegetarian_menu:
+...         print(pizza.name, '-', [topp.name for topp in pizza.toppings.all()])
+...
+1
+Margherita - ['Cheese', 'Tomato']
+2
+
+Here total 3 queries : 1 for restaurant, 1 for pizza and 1 for pizza toppings
+>>> for q in connection.queries:
+...   print(q['sql'])
+...
+SELECT prefetch_related_restaurant.id, prefetch_related_restaurant.best_pizza_id FROM prefetch_related_restaurant
+SELECT (prefetch_related_restaurant_pizzas.restaurant_id) AS _prefetch_related_val_restaurant_id, prefetch_related_pizza.id, prefetch_related_pizza.name, prefetch_related_pizza.vegetarian FROM prefetch_related_pizza INNER JOIN prefetch_related_restaurant_pizzas ON (prefetch_related_pizza.id = prefetch_related_restaurant_pizzas.pizza_id) WHERE (prefetch_related_pizza.vegetarian = 1 AND prefetch_related_restaurant_pizzas.restaurant_id IN (1, 2))
+SELECT (prefetch_related_pizza_toppings.pizza_id) AS _prefetch_related_val_pizza_id, prefetch_related_topping.id, prefetch_related_topping.name FROM prefetch_related_topping INNER JOIN prefetch_related_pizza_toppings ON (prefetch_related_topping.id = prefetch_related_pizza_toppings.topping_id) WHERE prefetch_related_pizza_toppings.pizza_id IN (1)
+
+
+# query-6
+>>> queryset = Pizza.objects.filter(vegetarian=True)
+>>>
+>>> # Recommended:
+>>> restaurants = Restaurant.objects.prefetch_related(
+...     Prefetch("pizzas", queryset=queryset, to_attr="vegetarian_pizzas")
+... )
+>>> vegetarian_pizzas = restaurants[0].vegetarian_pizzas
+>>>
+>>> # Not recommended:
+>>> restaurants = Restaurant.objects.prefetch_related(
+...     Prefetch("pizzas", queryset=queryset),
+... )
+>>> vegetarian_pizzas = restaurants[0].pizzas.all()

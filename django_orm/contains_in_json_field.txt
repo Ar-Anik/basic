@@ -1,0 +1,24 @@
+-> JSONField-এ contains বিশেষভাবে কাজ করে, JSONField-এ contains dict এর key-value আকারে filter করতে পারে.
+
+contains ব্যবহার করলে, Django নিশ্চিত করে যে JSON ফিল্ডের top-level এ দেওয়া key-value pair match হয়েছে কি না, এবং তার উপর ভিত্তি করে
+অবজেক্টগুলো রিটার্ন করে।
+
+-> top-level means, JSON এর সবচেয়ে বাইরের স্তর. like : info__contains={"brand": "Apple"}
+
+# Example
+>>> from json_app.models import Dogi
+
+-- object create
+>>> Dogi.objects.create(name='hasina', data={'breed': 'bal', 'owner': 'bangladesh'})
+>>> Dogi.objects.create(name='khaleda', data={'breed': 'bnp', 'owner': 'bangladesh'})
+>>> Dogi.objects.create(name='ncp', data={})
+>>> Dogi.objects.create(name='trump', data={'breed': 'america', 'tricks': ['kill', 'fight']})
+
+-- query
+>>> Dogi.objects.filter(data__contains={'owner': 'bangladesh'})
+<QuerySet [<Dogi: hasina>, <Dogi: khaleda>]>
+
+>>> Dogi.objects.filter(data__contains={'tricks': ['kill']})
+<QuerySet [<Dogi: trump>]>
+
+

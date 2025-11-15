@@ -1,0 +1,95 @@
+# Query
+b1 = Blog.objects.create(name="Tech World", tagline="Technology, Python, and Beyond")
+b2 = Blog.objects.create(name="Daily Dev", tagline="Tips and Tricks for Developers")
+
+a1 = Author.objects.create(name="John Doe", email="john@example.com")
+a2 = Author.objects.create(name="Jane Smith", email="jane@example.com")
+a3 = Author.objects.create(name="Mike Lee", email="mike@example.com")
+
+e1 = Entry.objects.create(
+    blog=b1,
+    headline="Understanding Django ORM",
+    body_text="A complete guide to Django ORM and QuerySets.",
+    pub_date=date(2024, 4, 12),
+    number_of_comments=10,
+    number_of_pingbacks=2,
+    rating=9
+)
+e1.authors.add(a1, a2)
+
+e2 = Entry.objects.create(
+    blog=b1,
+    headline="Mastering Django Models",
+    body_text="Learn how to design efficient Django models.",
+    pub_date=date(2024, 5, 3),
+    number_of_comments=6,
+    number_of_pingbacks=1,
+    rating=8
+)
+e2.authors.add(a2)
+
+e3 = Entry.objects.create(
+    blog=b2,
+    headline="FastAPI vs Django",
+    body_text="A deep comparison between FastAPI and Django frameworks.",
+    pub_date=date(2024, 6, 10),
+    number_of_comments=14,
+    number_of_pingbacks=3,
+    rating=10
+)
+e3.authors.add(a1, a3)
+
+e4 = Entry.objects.create(
+    blog=b1,
+    headline="Fuck vs Django",
+    body_text="Man is Wrong",
+    pub_date=date(2023, 6, 10)
+)
+e4.authors.add(a1, a2, a3)
+
+# Filter Blogs which publication date = 2023
+>>> Entry.objects.all().filter(pub_date__year=2023)
+or
+>>> Entry.objects.filter(pub_date__year=2023)
+
+# single Filter with multiple conditions
+>>> Entry.objects.filter(body_text__startswith="A", rating=10)
+
+# All Entry objects except those with rating = 9
+>>> Entry.objects.exclude(rating=9)
+
+# All entries which body_text not start with "A".
+>>> Entry.objects.exclude(body_text__startswith="A")
+
+
+# Chaining filters
+The result of refining a QuerySet is itself a QuerySet, so it’s possible to chain refinements together.
+
+# Example-1
+>>> Entry.objects.filter(body_text__startswith="A").filter(headline__startswith="Fast")
+>>> Entry.objects.filter(body_text__startswith="A").filter(rating=10)
+
+# Example-2
+Entry.objects.filter(body_text__startswith="A").exclude(pub_date__gte=date.today()).filter(pub_date__gte=date(2024, 4, 12))
+
+
+# Filtered QuerySets are unique
+>>> q1 = Entry.objects.filter(body_text__startswith="A")
+>>> q2 = q1.exclude(pub_date__gte=date.today())
+>>> q3 = q2.filter(headline__startswith="Under")
+
+Each time we refine a QuerySet, we get a brand-new QuerySet that is in no way bound to the previous QuerySet. Each
+refinement creates a separate and distinct QuerySet that can be stored, used and reused.
+
+
+# QuerySets are lazy
+QuerySet objects are lazy – the act of creating a QuerySet doesn’t involve any database activity
+
+>>> q = Entry.objects.filter(body_text__icontains="Django")
+>>> q = q.filter(pub_date__lt=date(2024, 6, 10))
+>>> q = q.filter(headline__startswith="Master")
+print(q)
+
+Though this looks like three database hits, in fact it hits the database only once, at the last line (print(q)). In general,
+the results of a QuerySet aren’t fetched from the database until we “ask” for them.
+

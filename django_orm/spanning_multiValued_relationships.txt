@@ -1,0 +1,69 @@
+Reference Project : My orm_practice Local Project
+
+যখন আমরা ManyToManyField বা reverse ForeignKey (যেমন Blog → Entry) এর মাধ্যমে ফিল্টার করি, এবং একসাথে একাধিক শর্ত দিই,
+তখন Django কে ঠিক করতে হয় —
+সব শর্ত কি একই Entry object-এ মেলাতে হবে, নাকি Django বিভিন্ন Entry-এর তথ্য মিলিয়ে Blog-টি নিয়ে আসতে পারবে”
+
+-> আমরা এমন Blog খুঁজতে চাই যেখানে headline-এ "Anik" আছে এবং সেই Entry-টির publication year 2008
+
+# Query 1
+Blog.objects.filter(entry__headline__contains="Anik", entry__pub_date__year=2008)
+
+এখানে দুটো শর্তই একই .filter() এর মধ্যে লেখা হয়েছে, এর মানে Django এমন একটি Entry খুঁজবে যার Entry-টির headline-এ "Anik"
+থাকবে এবং সেই Entry-টির publication year হবে 2008.
+
+- In Mysql Query
+SELECT DISTINCT tblog_blog.id, tblog_blog.name
+FROM tblog_blog
+INNER JOIN tblog_entry ON tblog_blog.id = tblog_entry.blog_id
+WHERE tblog_entry.headline LIKE '%Anik%'
+AND YEAR(tblog_entry.pub_date) = 2008;
+
+# Query 2
+Blog.objects.filter(entry__headline__contains="Anik").filter(entry__pub_date__year=2008)
+
+প্রত্যেকটা filter() মানে একটি join operation. এখানে দুইটা .filter() আলাদা call করা হয়েছে। এর মানে Django এমন Blog খুঁজবে
+যেখানে:
+- অন্তত একটি Entry আছে যার headline-এ "Anik" আছে
+এবং
+- অন্তত একটি Entry আছে যেটি 2008 সালের (যে Entry একইটা না হলেও চলবে)
+
+- In Mysql Query
+SELECT tblog_blog.id, tblog_blog.name
+FROM tblog_blog
+INNER JOIN tblog_entry AS T1 ON tblog_blog.id = T1.blog_id
+INNER JOIN tblog_entry AS T2 ON tblog_blog.id = T2.blog_id
+WHERE T1.headline LIKE '%Anik%'
+AND YEAR(T2.pub_date) = 2008;
+
+
+# It Not 100% right
+# Exclude function
+# এমন Blog বাদ দিতে চাই যেগুলোর কোনো এক Entry-তে একসাথে ‘Anik’ আছে headline-এ এবং সেই একই Entry 2008 সালের।
+
+-> Blog.objects.exclude(entry__headline__contains="Anik", entry__pub_date__year=2008)
+এই কুয়েরিটি এমন সব Blog বাদ দেবে যেগুলোর মধ্যে — কমপক্ষে একটি Entry আছে যার headline-এ “Anik” আছে এবং কমপক্ষে একটি Entry
+আছে যার pub_date-এর বছর 2008।
+কিন্তু দুটি condition একই Entry object-এর জন্য নাও হতে পারে মানে:
+- এক Entry headline-এ “Anik” থাকতে পারে
+- অন্য Entry 2008 সালের হতে পারে, তবুও সেই Blog বাদ যাবে।
+
+That means, Django exclude() এর multi-condition একই related object-এ enforce করে না।
+
+-> if we want, একই Entry-এর উপর দুটি শর্ত প্রয়োগ করতে.
+Blog.objects.exclude(
+    entry__in=Entry.objects.filter(
+        headline__contains="Anik",
+        pub_date__year=2008,
+    )
+)
+
+- Equvalent Mysql Query
+SELECT DISTINCT tblog_blog.id, tblog_blog.name
+FROM tblog_blog
+WHERE NOT (tblog_blog.id IN (
+    SELECT tblog_entry.blog_id
+    FROM tblog_entry
+    WHERE tblog_entry.headline LIKE '%Anik%'
+      AND YEAR(tblog_entry.pub_date) = 2008
+));

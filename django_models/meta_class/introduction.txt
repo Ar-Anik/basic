@@ -1,0 +1,105 @@
+Q : What is the Meta class?
+-> Every Django model can contain an inner class called Meta (short for metadata). This inner class does not
+represent data, but rather defines how the model itself behaves — in the database, in admin and in ORM queries.
+
+In simple terms,
+The Meta class provides options or settings about the model — not its data, but how Django should treat it.
+
+# Meta Options
+- db_table --> define custom database table name
+- ordering --> define default ordering for querysets
+- verbose_name --> define human-readable name for admin display
+- unique_together --> (Old syntax) to define uniqueness across multiple fields
+- constraints --> List of database-level constraints such as UniqueConstraint, CheckConstraint, etc.
+
+# Example
+class Membership(models.Model):
+    person = models.ForeignKey(Person, on_delete=models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    date_joined = models.DateField()
+
+    class Meta:
+        db_table = "membership_table"
+        ordering = ["-date_joined"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "group"],
+                name="unique_person_group"
+            )
+        ]
+
+Here,
+- db_table → tells Django to use table name membership_table
+- ordering → sorts query results by date_joined descending
+- constraints → defines a database-level uniqueness rule
+
+Q : What is the constraints list?
+- The constraints list in the Meta class is used to define database-level constraints. These constraints ensure
+data integrity, i.e., rules enforced directly at the database layer.
+
+Each item in the list must be a subclass of models.BaseConstraint, such as:
+    - models.UniqueConstraint
+    - models.CheckConstraint
+    - models.ExclusionConstraint (PostgreSQL only)
+
+# Example
+class Meta:
+    constraints = [
+        models.UniqueConstraint(fields=['person', 'group'], name='unique_person_group'),
+        models.CheckConstraint(check=models.Q(date_joined__lte='2025-12-31'), name='valid_date_joined'),
+    ]
+
+Here:
+- The list contains two constraints.
+- The first ensures each (person, group) pair appears only once.
+- The second ensures date_joined is less than or equal to a given date.
+
+Each constraint ensures that certain logical or validation rules hold true for data in the table. If a record
+violates a constraint, the database will reject the operation and raise an error (typically IntegrityError).
+
+
+Q : What is models.UniqueConstraint()?
+-> models.UniqueConstraint() is a Django ORM class used to define a unique constraint at the database level.
+This ensures that no two rows in the table have the same combination of values across the specified fields.
+
+models.UniqueConstraint(
+    fields=["field_1", "field_2", ...],
+    name="constraint_name"
+)
+
+- Example :
+models.UniqueConstraint(fields=['person', 'group'], name='unique_person_group')
+
+Means in the intermideate table, no two records can have the same person_id and group_id.
+
+
+# Custom Constraint Names for Each Foreign Key
+Suppose we want user-defined constraint names for each ForeignKey field — for example, to ensure each FK column
+has a specific foreign key constraint name in the database. By default, Django automatically creates foreign key
+constraints like:
+membership_person_id_123abc_fk_person_id
+membership_group_id_456def_fk_group_id
+
+# Example :
+class Membership(models.Model):
+    person = models.ForeignKey(
+        Person,
+        on_delete=models.CASCADE,
+        db_constraint=True,  # enable constraint
+        db_constraint_name="fk_membership_person"
+    )
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        db_constraint=True,
+        db_constraint_name="fk_membership_group"
+    )
+    date_joined = models.DateField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "group"],
+                name="unique_person_group"
+            )
+        ]

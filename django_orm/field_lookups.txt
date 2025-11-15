@@ -1,0 +1,72 @@
+# Basic lookups keyword arguments take the form field__lookuptype=value
+Here `__` double underscore seperate field and lookup type.
+
+-> Some Common Lookup Type
+# gt = Greater Than
+# gte = Greater Than Equal
+# lt = Less Than
+# lte = Less Than Equal
+
+>>> Entry.objects.filter(pub_date__lte="2025-01-14")
+This equvalent to : SELECT * FROM blog_entry WHERE pub_date <= '2025-01-14';
+
+# If the field is a ForeignKey, we can use the field name suffixed with _id. In that case, the value should be the
+raw primary key of the related model (usually an integer).
+>>> Entry.objects.filter(blog_id=4)
+
+# exact(An “exact” match)
+>>> Entry.objects.get(headline__exact="FastAPI vs Django")
+This equvalent to : SELECT * From blog_entry WHERE headline = 'Cat bites dog';
+
+If we don’t provide a lookup type, the lookup type is assumed to be exact.
+
+# iexact(A case-insensitive match)
+>>> Blog.objects.get(name__iexact="daIly deV")
+
+# contains(Case-sensitive containment test)
+>>> Entry.objects.get(headline__contains="Fuck")        # for single object
+>>> Entry.objects.filter(headline__contains="Django")   # for multiple object
+
+This equvalent to : SELECT * From blog_entry WHERE headline LIKE '%Django%';
+
+# icontains(Case-insensitive containment test)
+>>> Entry.objects.get(body_text__icontains="body")
+>>> Entry.objects.filter(body_text__icontains="django")
+
+# startswith (starts with search)
+# endswith (ends with search)
+# istartswith (case-insensitive starts with search)
+# iendswith (case-insensitive ends with search)
+
+
+
+# Django ORM allows us to “follow” relationships between models automatically when performing lookups. Django handles
+the necessary SQL JOINs behind the scenes, so we don’t need to write them manually. To access (or “span”) fields
+across related models, we use the related field names separated by double underscores (__) until you reach the
+desired field.
+
+>>> Entry.objects.filter(blog__name="Tech World")
+
+# Django ORM supports reverse lookups using the lowercase name of the related model (or the related_name if defined).
+This allows us to query backward through relationships — Django handles the reverse JOIN automatically.
+
+>>> Blog.objects.filter(entry__headline__contains="Django")
+
+# Django যখন ফিল্টার করে intermediate relation-এ যদি object না থাকে তখনও error দেয় না। NULL বা missing object কে valid ধরা হয়।
+যখন আপনি একাধিক সম্পর্কের উপর ফিল্টার করছেন, যেমন:
+>>> Blog.objects.filter(entry__authors__name="John")
+
+যখন আপনি একাধিক relations উপর ফিল্টার করছেন, যেমন: Blog → Entry → Author
+- Django প্রতিটি intermediate মডেলকে চেক করে।
+- যদি কোনো intermediate object না থাকে (যেমন কোন Entry এর সাথে Author যুক্ত নেই), Django error দেয় না। এটি এমন ধরে নেয় যেন
+NULL/খালি object আছে, কিন্তু valid object।
+
+# isnull
+>>> Blog.objects.filter(entry__authors__name__isnull=True)
+এটি এমন Blog object দেয় যেখানে:
+- Author আছে কিন্তু নাম খালি (NULL)
+- Entry তে Author নেই (empty relation)
+
+# যদি Entry তে Author নেই (empty relation) বাদ দিতে চান, অর্থাৎ শুধুই নাম NULL কিন্তু Author আছে:
+>>> Blog.objects.filter(entry__authors__isnull=False, entry__authors__name__isnull=True)
+
