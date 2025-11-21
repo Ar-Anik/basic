@@ -1,0 +1,103 @@
+Q : What is bulk_create()?
+-> bulk_create() is a Django ORM method that allows us to insert multiple objects into the database using one SQL query (or a few queries if batching is used).
+
+In simple words:
+  - It is used for fast insertion of many records.
+  - It does not call save() on each object.
+  - It does not trigger signals like pre_save or post_save.
+  - It only performs INSERT, not update.
+
+It's behavior:
+  - Insert new rows only
+  - Perform it in bulk (super fast)
+  - Does not run model-level logic
+
+
+Q : How does bulk_create() save data without save()?
+-> Because Django does NOT use save() for bulk operations. bulk_create() directly constructs a raw SQL INSERT query and sends it to the database.
+
+# That means:
+  - The ORM does not call the model's save() method.
+  - The database inserts the rows directly.
+  - Django skips all the extra logic inside save() and signals.
+  - This is why bulk_create() is much faster than looping through .save().
+
+
+# Normal Example :
+# models.py
+from django.db import models
+
+class Note(models.Model):
+    title = models.CharField(max_length=100)
+    body = models.TextField()
+
+
+>>> from blk_crt.models import Note
+>>> n1 = Note(title="Note 1", body="Body 1")
+>>> n2 = Note(title="Note 2", body="Body 2")
+>>> n3 = Note(title="Note 3", body="Body 3")
+
+>>> Note.objects.bulk_create([n1, n2, n3])
+[<Note: Note object (None)>, <Note: Note object (None)>, <Note: Note object (None)>]
+
+
+For above query, Internally Django collects these 3 objects. Django builds one SQL INSERT statement like:
+
+INSERT INTO note (title, body) VALUES
+('Note 1', 'Body 1'),
+('Note 2', 'Body 2'),
+('Note 3', 'Body 3');
+
+
+- Database executes this query.
+- No save() method is executed.
+- No signals are executed.
+- No validation is performed.
+- No per-object logic runs.
+- This is how Django inserts objects without calling .save().
+
+
+# Limitations
+- Auto fields (like auto_now, signals, foreign key validation) won't run
+- Only for new objects → it cannot update existing rows
+
+Now we add 2 field create_at(auto_now_add) and updated_at(auto_now) in our Note Models. so models.py :
+
+class Note(models.Model):
+    title = models.CharField(max_length=100)
+    body = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+>>> from django.utils import timezone
+>>> now = timezone.now()
+
+>>> n5 = Note(title="A", body="Body A", created_at=now, updated_at=now)
+>>> n6 = Note(title="B", body="Body B", created_at=now, updated_at=now)
+>>> n7 = Note(title="C", body="Body C", created_at=now, updated_at=now)
+>>> n8 = Note(title="D", body="Body D", created_at=now, updated_at=now)
+
+>>> notes = [n5, n6, n7, n8]
+>>> Note.objects.bulk_create(notes, batch_size=200)
+[<Note: Note object (None)>, <Note: Note object (None)>, <Note: Note object (None)>, <Note: Note object (None)>]
+
+Here, batch_size meaning is, How many objects should be inserted into the database in one SQL query.
+
+>>> Note.objects.filter(title__startswith="Note")
+<QuerySet [<Note: Note object (1)>, <Note: Note object (2)>, <Note: Note object (3)>]>
+
+# bulk_update -> it take two arguments List of object and field. Return how many filed updated or effected.
+>>> notes = Note.objects.filter(title__startswith="Note")
+>>> for n in notes:
+...    n.update_at = now
+...
+>>> Note.objects.bulk_update(notes)
+Traceback (most recent call last):
+  File "<console>", line 1, in <module>
+  File "/home/prismerp/Desktop/prg/b_env/lib/python3.10/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+TypeError: QuerySet.bulk_update() missing 1 required positional argument: 'fields'
+
+>>> Note.objects.bulk_update(notes, ['updated_at'])
+3
