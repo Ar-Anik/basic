@@ -1,0 +1,64 @@
+DATABASES = {
+   'default': {
+       'ENGINE': 'django.db.backends.mysql',
+       'NAME': 'database_name',
+       'USER': 'database_user_name',
+       'PASSWORD': 'database_user_password',
+       'HOST': '103.106.118.108',
+       'PORT': '3306',
+   }
+}
+
+
+1. DATABASES
+এটি একটি dictionary (ডিকশনারি), যেখানে Django-এর সব ডাটাবেসের তথ্য রাখা হয়। একাধিক ডাটাবেস থাকলে একাধিক কী থাকতে পারে এখানে
+'default' হচ্ছে Main ডাটাবেস
+
+2. 'default'
+Django ডিফল্টভাবে এই ডাটাবেসটাই ব্যবহার করে:
+- migrate
+- makemigrations
+- createsuperuser
+- সব Model-এর ডাটা সংরক্ষণ
+
+3. 'ENGINE': 'django.db.backends.mysql'
+এর মানে হলো:
+- Django কোন ধরনের ডাটাবেস ব্যবহার করবে
+- এখানে নির্বাচন করা হয়েছে MySQL
+
+Django সমর্থিত অন্যান্য ENGINE উদাহরণ:
+    - django.db.backends.sqlite3
+    - django.db.backends.postgresql
+    - django.db.backends.oracle
+
+4. 'NAME': 'database_name'
+এটি হলো ডাটাবেসের নাম:
+- MySQL সার্ভারে যে ডাটাবেস তৈরি করা আছে
+- Django এই Database-ই সব টেবিল বানাবে
+
+Example : 'NAME': 'school_management'
+
+5. 'USER': 'database_user_name'
+ডাটাবেসে লগইন করার জন্য ব্যবহৃত username, এই ইউজারের মাধ্যমে:
+- ডাটাবেসে টেবিল তৈরি হবে
+- ডাটা সংরক্ষণ হবে
+- ডাটা read/write হবে
+
+6. 'PASSWORD': 'database_user_password'
+উল্লেখ করা ইউজারের পাসওয়ার্ড এটি ছাড়া Django ডাটাবেসে ঢুকতে পারবে না
+
+7. 'HOST': '103.106.118.108'
+এই অংশটি নির্দেশ করে:
+- MySQL সার্ভার কোন IP-address-এ চলছে
+- এখানে এটি একটি Remote Server IP
+
+অর্থাৎ:
+- ডাটাবেস নিজের কম্পিউটারে নয়
+- অন্য একটি সার্ভারে রাখা হয়েছে
+
+লোকাল হলে সাধারণত লেখা হয়: 'HOST': 'localhost'
+
+8. 'PORT': '3306'
+এটি হলো MySQL-এর ডিফল্ট পোর্ট:
+- MySQL সাধারণত সবসময় 3306 পোর্টেই চলে
+- এই পোর্ট দিয়েই Django MySQL সার্ভারে connection create করে

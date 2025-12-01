@@ -1,0 +1,64 @@
+# Create Normal User
+>>> from django.contrib.auth.models import User
+>>> user = User.objects.create_user("anik", "anik@gmail.com", "12345")
+
+>>> user.__dict__
+{'_state': < django.db.models.base.ModelState object at 0x106852e40 >, 'id': 1,
+'password': 'pbkdf2_sha256$1000000$nvmhTDR3mvelhTsjvbWgUI$3SbMWN+vg6qJ5UMLkSirxAkhvV7jOGnyOrhoA8uA5MI=',
+'last_login': None, 'is_superuser': False, 'username': 'anik', 'first_name': '', 'last_name': '',
+'email': 'anik@gmail.com', 'is_staff': False, 'is_active': True,
+'date_joined': datetime.datetime(2025, 12, 1, 19, 3, 17, 346757, tzinfo=datetime.timezone.utc)}
+
+# Modify User
+>>> user.first_name = "Ar"
+>>> user.last_name = "Anik"
+>>> user.save()
+
+>>> user.__dict__
+{'_state': <django.db.models.base.ModelState object at 0x106852e40>, 'id': 1,
+'password': 'pbkdf2_sha256$1000000$nvmhTDR3mvelhTsjvbWgUI$3SbMWN+vg6qJ5UMLkSirxAkhvV7jOGnyOrhoA8uA5MI=',
+'last_login': None, 'is_superuser': False, 'username': 'anik', 'first_name': 'Ar', 'last_name': 'Anik',
+'email': 'anik@gmail.com', 'is_staff': False, 'is_active': True,
+'date_joined': datetime.datetime(2025, 12, 1, 19, 3, 17, 346757, tzinfo=datetime.timezone.utc)}
+
+# update user password
+Django কখনোই ব্যবহারকারীর plain পাসওয়ার্ড (plain text / clear text) ডাটাবেজে সংরক্ষণ করে না। এর পরিবর্তে Django সংরক্ষণ করে Password
+Hash, অর্থাৎ:
+- ব্যবহারকারী যে পাসওয়ার্ড দেয় → Django সেটিকে সরাসরি সংরক্ষণ না করে
+- সেটিকে একটি বিশেষ ক্রিপ্টোগ্রাফিক অ্যালগরিদম দিয়ে encrypted hash বানিয়ে সংরক্ষণ করে
+
+এর কারণ:
+- যদি ডাটাবেস হ্যাক হয়, তাহলে যেন কেউ আসল পাসওয়ার্ড না পায়, ব্যবহারকারীর নিরাপত্তা সর্বোচ্চ স্তরে রাখা যায়
+
+Django স্পষ্টভাবে বলে দিয়েছে: কখনোই সরাসরি user.password(user.password = "12345") attribute change করা যাবে না। কারণ:
+- এতে পাসওয়ার্ড hash হবে না
+- Django সেটাকে plain text হিসেবে ধরে নেবে
+
+ফলে লগইন কাজ নাও করতে পারে, বড় ধরনের security vulnerability তৈরি হবে। এই কারণেই Django একটি helper function ব্যবহার করে:
+    set_password()
+
+-> Way-1 (From Command Line)
+>>> python manage.py changepassword username
+
+After run this command, Django নির্দিষ্ট ইউজারের জন্য নতুন পাসওয়ার্ড চাইবে, একই পাসওয়ার্ড ২ বার দিতে হবে, দুইবারের পাসওয়ার্ড মিলে গেলে সাথে
+সাথে নতুন পাসওয়ার্ড সেট হয়ে যাবে।
+
+>>> python manage.py changepassword
+যদি username না দেওয়া হয় Django চেষ্টা করবে বর্তমান অপারেটিং সিস্টেমের লগইন করা ইউজারের পাসওয়ার্ড পরিবর্তন করতে।
+
+-> Way-2
+>>> from django.contrib.auth.models import User
+>>> u = User.objects.get(username="anik")
+>>> u.set_password("asdf1234")
+>>> u.save()
+
+যখনই কোনো ইউজারের password change করা হয়, তখন সেই ইউজারের সব login session স্বয়ংক্রিয়ভাবে logout হয়ে যায়
+
+-> যদি Django–র Admin Panel চালু থাকে, তাহলে Django Admin Panel ব্যবহার করে পাসওয়ার্ড change করা যায়
+
+-> Django নিজে থেকেই প্রস্তুত করে দিয়েছে:
+- Password Change Form
+- Password Change View
+- Password Reset System
+
+যার মাধ্যমে ব্যবহারকারী নিজে লগইন করে নিজের পাসওয়ার্ড পরিবর্তন করতে পারে

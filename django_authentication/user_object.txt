@@ -1,0 +1,148 @@
+Link : https://docs.djangoproject.com/en/5.2/ref/contrib/auth/#django.contrib.auth.models.User
+
+-> User Object হলো Django Authentication System-এর মূল ভিত্তি। এই User অবজেক্ট দিয়েই—
+    - কে লগইন করেছে
+    - কে কোন কাজ করতে পারবে
+    - কে কনটেন্ট তৈরি করেছে
+    - কে অ্যাডমিন হবে
+    - কে নিষ্ক্রিয় থাকবে
+—এই সবকিছু নিয়ন্ত্রণ করা হয়।
+
+Django-তে আলাদা কোনো “Admin User Class” নেই। Superuser, Staff, Normal User — সবাই একই User model-এর অবজেক্ট, পার্থক্য হয়
+শুধু কিছু Boolean ফিল্ডের মাধ্যমে।
+
+
+# Django User Model
+    class models.User
+এই ক্লাসটি Django নিজে থেকেই তৈরি করে দেয়।
+
+
+# User Model-এর Fields
+
+1. username
+- Field Type: Required
+- সর্বোচ্চ 150 character
+- যেসব ক্যারেক্টার ব্যবহার করা যাবে: a-z, A-Z, 0-9, _, @, +, ., -
+- ডিফল্টভাবে এটিই User-এর পরিচয়
+- যদি 150 character যথেষ্ট না হয় → Custom User Model ব্যবহার করতে হবে
+
+2. first_name
+- Field Type: Optional
+- blank=True
+- সর্বোচ্চ 150 character
+
+3. last_name
+- Field Type: Optional
+- blank=True
+- সর্বোচ্চ 150 character
+
+4. email
+- Field Type: Optional
+- ইমেইল ফরম্যাটে হতে হবে (must have @)
+- blank=True
+
+5. password
+- Field Type: Required
+- Django কখনোই raw password সংরক্ষণ করে না এখানে থাকে:
+    * Hashed password
+    * Password সম্পর্কিত মেটাডাটা
+- Raw password:
+    * যেকোনো দৈর্ঘ্যের হতে পারে
+    * যেকোনো ক্যারেক্টার থাকতে পারে
+
+চাইলে user-কে এমন অবস্থায়ও রাখা যায় যেখানে তার কোনো usable password থাকবে না।
+
+6. groups
+- Many-to-Many relation
+- Group টেবিলের সাথে যুক্ত
+- ইউজার কোন কোন গ্রুপে আছে → তা নির্ধারণ করে
+
+7. user_permissions
+- Many-to-Many relation
+- Permission টেবিলের সাথে যুক্ত
+- নির্দিষ্ট ইউজারকে সরাসরি আলাদা পারমিশন দেওয়া যায়
+
+8. is_staff
+- Data Type: Boolean (True / False)
+- True হলে: ইউজার Django Admin Panel-এ ঢুকতে পারবে
+
+9. is_active
+- Data Type: Boolean
+- True হলে → user active
+- False হলে → user inactive
+
+Account ডিলিট না করে is_active = False করা সবচেয়ে নিরাপদ পদ্ধতি, কারণ:
+    - ForeignKey Relationp ভাঙবে না
+    - User history নষ্ট হবে না
+
+Default authentication backend (ModelBackend), RemoteUserBackend দু'টিই is_active=False হলে লগইন করতে দেয় না। তবে চাইলে:
+    - AllowAllUsersModelBackend
+    - AllowAllUsersRemoteUserBackend
+ব্যবহার করে inactive user-কেও লগইন করানো যায়। কিন্তু:
+    - Django Admin
+    - has_perm() function
+সবসময় inactive user-এর জন্য False রিটার্ন করবে।
+
+10. is_superuser
+- Data Type: Boolean
+- True হলে:
+    * সব permission স্বয়ংক্রিয়ভাবে পেয়ে যায়
+    * আলাদা করে permission দেওয়ার দরকার হয় না
+
+11. last_login
+সর্বশেষ কখন লগইন করা হয়েছে তার DateTime
+
+12. date_joined
+কখন অ্যাকাউন্ট তৈরি হয়েছে তার DateTime
+
+
+# User Model-এর Attributes
+
+1. is_authenticated
+- Read-only
+- User object হলে সবসময় True
+- AnonymousUser Object হলে সবসময় False
+
+এই attribute, ইউজার লগইন হয়েছে কিনা বুঝতে ব্যবহৃত হয়, তবে এটা:
+    - Permission চেক করে না
+    - Session valid কিনা সেটাও চেক করে না
+
+2. is_anonymous
+- Read-only
+- User object হলে সবসময় False
+- AnonymousUser object হলে সবসময় True
+
+
+# User Model-এর Methods
+
+1. get_username()
+- ইউজারের username রিটার্ন করে
+- Custom User Model ব্যবহার করলে সরাসরি username লেখা ঠিক নয়
+- সব সময় এই method ব্যবহার করা নিরাপদ
+
+2. get_full_name()
+first_name + last_name রিটার্ন করে
+
+3. get_short_name()
+শুধু first_name রিটার্ন করে
+
+4. set_password(raw_password)
+- Raw password কে hash করে সংরক্ষণের জন্য প্রস্তুত করে
+- database-এ save করে না
+- raw_password=None দিলে: unusable password সেট হয়
+
+5. check_password(raw_password) and acheck_password(raw_password) -> acheck_password() for Async version
+- Raw password সঠিক হলে True
+- ভুল হলে False
+- Hash system নিজে থেকেই মিলিয়ে নেয়
+
+6. set_unusable_password()
+- user কে এমন অবস্থায় নিয়ে যায় যেখানে সে কখনো পাসওয়ার্ড দিয়ে ঢুকতে পারবে না
+- LDAP, External Auth ব্যবহারে কাজে লাগে
+- After use this function user: Password reset করতে পারবে না
+
+7. has_usable_password()
+- usable হলে True
+- unusable হলে False
+
+
