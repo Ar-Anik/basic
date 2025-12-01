@@ -1,0 +1,169 @@
+Django-র Authentication System মূলত দুইটি কাজ একসাথে করে:
+
+1. Authentication (পরিচয় যাচাই)
+এটি যাচাই করে - “ব্যবহারকারী সত্যিই সে নিজেই কি না যাকে সে দাবি করছে?”।
+Example:
+    - ইউজারনেম ও পাসওয়ার্ড দিয়ে লগইন
+    - Google দিয়ে লগইন
+
+অর্থাৎ পরিচয় নিশ্চিত করা = Authentication
+
+2. Authorization (অনুমতি যাচাই)
+এটি নির্ধারণ করে - “লগইন করা ব্যবহারকারী কী কী কাজ করতে পারবে?”
+Example :
+    - পোস্ট তৈরি করতে পারবে?
+    - অন্যের পোস্ট ডিলিট করতে পারবে?
+    - অ্যাডমিন প্যানেলে ঢুকতে পারবে?
+
+অর্থাৎ কাজ করার অনুমতি নির্ধারণ = Authorization
+
+কিন্তু Django-র ডকুমেন্টেশনে অনেক সময় Authentication শব্দটা ব্যবহার করা হয় এই দুই কাজ একসাথে বোঝাতে (পরিচয় + অনুমতি)।
+
+
+# Django authentication system মোট ৬টি বড় অংশ নিয়ে তৈরি:
+
+1. Users
+প্রত্যেক ব্যবহারকারীর জন্য একটি User object থাকে, যেখানে থাকে:
+    - Username
+    - Password
+    - Email
+    - is_staff
+    - is_superuser
+
+2. Permissions
+Permission হলো Boolean or yes/no টাইপের অনুমতি।
+Example:
+    - post.add_post → পোস্ট যোগ করতে পারবে?
+    - post.delete_post → পোস্ট ডিলিট করতে পারবে?
+
+প্রতিটি অনুমতি শুধু দুই রকম হতে পারে: আছে or নেই
+
+3. Groups (গ্রুপ)
+Group মানে হলো, একাধিক ইউজারকে একসাথে একটি পরিচয় ও পারমিশন দেওয়া
+Example:
+    - “Editor” গ্রুপ
+    - “Manager” গ্রুপ
+
+একবার একটি গ্রুপে পারমিশন সেট করলে— ঐ গ্রুপের সব ইউজার সেই পারমিশন পেয়ে যায়
+
+4. Configurable Password Hashing System
+Django কখনোই পাসওয়ার্ড প্লেইন টেক্সটে সংরক্ষণ করে না। এটি:
+    - পাসওয়ার্ডকে hash করে
+    - তারপর ডাটাবেজে সেভ করে
+এবং এটি:
+    - পরিবর্তনযোগ্য (configurable)
+    - একাধিক hashing algorithm সাপোর্ট করে
+
+ফলে ডাটাবেজ হ্যাক হলেও পাসওয়ার্ড সরাসরি দেখা যায় না
+
+5. Forms ও Views (লগইন ও কন্টেন্ট রক্ষা করার টুল)
+Django আগে থেকেই দেয়:
+    - Login form
+    - Logout system
+    - Password reset
+    - Login required decorator
+এগুলো দিয়ে সহজেই:
+    - ইউজার লগইন করানো যায়
+    - নির্দিষ্ট পেজ কেবল লগইন করা ইউজারের জন্য সীমাবদ্ধ করা যায়
+
+6. Pluggable Backend System
+Django-তে একাধিক authentication system একসাথে বা আলাদা করে ব্যবহার করা যায়—কোর কোড change না করে।
+Example:
+    - Database ইউজার
+    - Google OAuth login
+    - Facebook login
+    - LDAP login
+
+সবগুলো একসাথে ব্যবহার করা সম্ভব — এটাকেই বলা হয় Pluggable Backend System. অর্থাৎ Django-তে authentication system মডিউল আকারে
+Add বা Remove যায়।
+
+
+# Django Auth System-এ Default ভাবে কিছু ফিচার নেই। এই ফিচারগুলো Django নিজে দেয় না, তবে Third-Party Package দিয়ে যুক্ত করা যায়:
+1. Password Strength Checking
+পাসওয়ার্ড দুর্বল না শক্তিশালী—এটি আলাদা প্যাকেজ দিয়ে যাচাই করা হয়।
+
+2. Throttling of Login Attempts
+একাধিকবার ভুল পাসওয়ার্ড দিলে সাময়িকভাবে লগইন ব্লক করা। Brute force attack ঠেকানোর জন্য দরকার।
+
+3. Authentication Against Third-Parties (OAuth)
+Google, Facebook, GitHub দিয়ে লগইন।
+
+4. Object-Level Permissions
+Object-level permissions control what actions a user can perform on a specific row/object of data, not just on the
+entire model or table. This is more advanced than normal permissions.(ডাটাবেজের নির্দিষ্ট একটি রেকর্ডের উপর আলাদা অনুমতি)
+Example :
+    - নিজের পোস্ট এডিট করতে পারবে
+    - অন্যের পোস্ট পারবে না
+
+
+# Django প্রজেক্ট তৈরি করলে Authentication System আগে থেকেই যুক্ত থাকে।
+1. settings.py তে এই দুইটি থাকে:
+INSTALLED_APPS = [
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+]
+
+2. Middleware-এ থাকে:
+MIDDLEWARE = [
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+]
+
+
+# 'django.contrib.auth'
+এটি হলো Django Authentication System-এর মূল কেন্দ্র (core engine)। এটার ভেতরেই থাকে:
+User Model, Group Model, Permission Model, Login system, Logout system, Password hashing, Authentication backend
+is_staff, is_superuser, Permission checking system
+
+যদি এই App টি INSTALLED_APPS থেকে বাদ দেওয়া হয়:
+    - Login কাজ করবে না
+    - Admin panel-এ ইউজার থাকবে না
+    - Permission বলে কিছু থাকবে না
+
+# 'django.contrib.contenttypes'
+এটি Permission System-এর backbone. এটি Django-কে শেখায়: “এই Permission টা কোন Model-এর জন্য তৈরি হচ্ছে?”
+Example :
+    - add_post → Post Model-এর জন্য
+    - delete_product → Product Model-এর জন্য
+    - view_order → Order Model-এর জন্য
+
+এই relation তৈরি করে দেয় ContentType System। কোন Permission কোন Model-এর জন্য—এই ম্যাপিংটা করে contenttypes
+
+
+# 'django.contrib.sessions.middleware.SessionMiddleware'
+SessionMiddleware Django-কে check করা শেখায়: একজন ব্যবহারকারী বর্তমান request-এ login আছে কি না?
+
+HTTP হচ্ছে একটি stateless protocol অর্থাৎ:
+    - প্রতিটি request আলাদা
+    - আগের request-এর কোনো data নেই
+
+কিন্তু বাস্তবে দরকার হয়:
+    - User একবার login করলে বারবার login করতে না হওয়া
+    - User ডাটা মনে রাখা
+    - form-এর অস্থায়ী ডাটা রাখা
+
+এই “মনে রাখার কাজটাই” করে SessionMiddleware।
+
+# django.contrib.auth.middleware.AuthenticationMiddleware
+AuthenticationMiddleware যা প্রতিটি request-এর সাথে request.user যুক্ত করে দেয়
+
+প্রতিটি request আসলে Django:
+    - SessionMiddleware আগে চালু হয়
+    - Session থেকে user_id বের করে
+    - AuthenticationMiddleware সেই user_id নেয়
+    - Database থেকে আসল User object আনে
+    - সেই User object বসিয়ে দেয় request-এর সাথে request.user-এ
+
+
+# Short Authentication Flow
+Browser Request
+      ↓
+SessionMiddleware → session data লোড
+      ↓
+AuthenticationMiddleware → user object load
+      ↓
+request.user তৈরি
+      ↓
+View → permission check → response
+
+
