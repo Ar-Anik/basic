@@ -1,0 +1,115 @@
+-> Raw উপায়ে নির্দিষ্ট পেজে access limit করা হয় request.user.is_authenticated দিয়ে চেক করে।
+
+from django.conf import settings
+from django.shortcuts import redirect
+
+def my_view(request):
+    if not request.user.is_authenticated:
+        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
+    # ...
+
+এখানে:
+- settings.LOGIN_URL = কোন URL-এ লগ-ইন পেজ আছে।
+- ?next=/some/path/ = লগ-ইন করার পরে কোন পেজে ফেরত পাঠানো হবে।
+
+
+# or display an error message:
+from django.shortcuts import render
+
+def my_view(request):
+    if not request.user.is_authenticated:
+        return render(request, "myapp/login_error.html")
+    # ...
+
+
+-> login_required decorator
+Syntax : login_required(redirect_field_name='next', login_url=None)
+
+login_required() decorator টি view ফাংশনের উপরে ব্যবহার করলে ব্যবহারকারীর login অবস্থা স্বয়ংক্রিয়ভাবে যাচাই করে, login না থাকলে তাকে
+login পেজে redirect করে, যা login চেক করার প্রক্রিয়াকে অনেক সহজ করে তোলে, বিশেষত function-ভিত্তিক view-এর জন্য
+
+# Example
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def my_view(request):
+    ...
+
+login_required() সাধারণত যদি ব্যবহারকারী log-in না করে থাকে তাহলে automatically redirect হবে :
+    /accounts/login/?next=/polls/3/
+এখানে next query parameter ধরে রাখে log-in শেষে কোন পেজে ফেরত পাঠাতে হবে।
+
+যদি user log-in করা থাকে তাহলে view সাধারণভাবে চলবে এবং code বুঝতে পারবে যে user log-in করা আছে।
+
+# redirect_field_name parameter
+default ভাবে, successful log-in এর পর user কে কোথায় ফেরত পাঠানো হবে, সেই path টি "next" নামক parameter-এ থাকে। যদি এই
+প্যারামিটারের নাম পরিবর্তন করার প্রয়োজন হয়, তবে redirect_field_name ব্যবহার করা যায়:
+
+from django.contrib.auth.decorators import login_required
+
+@login_required(redirect_field_name="my_redirect_field")
+def my_view(request):
+    ...
+
+যখন redirect_field_name পরিবর্তন করা হয়, তখন log-in টেমপ্লেটে যে hidden ফিল্ডটি থাকে সেটির নামও পরিবর্তন করতে হয়। কারণ তখন context
+variable-এর key হবে "my_redirect_field"। Example Login Template:
+
+<form method="post">
+    {% csrf_token %}
+
+    <label>Username:</label>
+    <input type="text" name="username">
+
+    <label>Password:</label>
+    <input type="password" name="password">
+
+    <!-- IMPORTANT PART -->
+    <!-- default ছিল name="next" -->
+    <!-- এখন redirect_field_name="next_page" বলে Django context ≈ next_page -->
+    <input type="hidden" name="my_redirect_field" value="{{ my_redirect_field }}">
+
+    <button type="submit">Login</button>
+</form>
+
+Note : Django নিজেই একটি built-in Login View প্রদান করে। এটি login view এর জন্য নিজে কোনো html template তৈরি করে না
+Django-তে login system implement করার জন্য view already built-in থাকে: django.contrib.auth.views.LoginView
+
+# urls.py
+from django.contrib.auth import views as auth_views
+from django.urls import path
+
+urlpatterns = [
+    path("login/", auth_views.LoginView.as_view(), name="login"),
+]
+
+Django-র built-in LoginView ডিফল্টভাবে একটি নির্দিষ্ট path এ template খোঁজে : registration/login.html
+তাই project-এ template directory এর মধ্যে এই structure তৈরি করা বাধ্যতামূলক :
+templates/
+    registration/
+        login.html
+
+Template directory project-level বা app-level যে কোন একটিতে হতে পারে, কিন্তু structure অবশ্যই একই থাকতে হবে।
+Template না পেলে Django error দেয় : TemplateDoesNotExist: registration/login.html
+
+
+# login_url parameter
+login_required() ডেকোরেটরে সরাসরি login_url parameter use করে log-in পেইজের link বলে দেওয়া যায়।
+
+from django.contrib.auth.decorators import login_required
+
+@login_required(login_url="/accounts/login/")
+def my_view(request):
+    ...
+
+যদি ডেকোরেটরে login_url নির্দিষ্ট করে দেওয়া না হয়, তবে settings.LOGIN_URL set এবং প্রজেক্টের log-in view functional থাকা জরুরি।
+Example urls.py ফাইলে default log-in view:
+
+from django.contrib.auth import views as auth_views
+from django.urls import path
+
+urlpatterns = [
+    path("accounts/login/", auth_views.LoginView.as_view()),
+]
+
+settings.LOGIN_URL-এ সরাসরি url পাথের বদলে view ফাংশনের নাম বা Named URL Pattern-ও ব্যবহার করা যায়। এতে settings পরিবর্তন না
+করেই URLconf-এর মাধ্যমে log-in url যেকোনো সময় পরিবর্তন বা Remap করা সম্ভব হয়।

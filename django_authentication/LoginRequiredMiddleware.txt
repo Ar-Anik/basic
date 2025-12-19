@@ -1,0 +1,31 @@
+LoginRequiredMiddleware Active থাকলে:
+- প্রতিটি request-এ authenticated না হলে user-কে login page-এ redirect করে।
+- শুধুমাত্র যেসব view-এ @login_not_required রয়েছে সেগুলো public থাকে।
+
+# settings.py
+MIDDLEWARE = [
+    # Django default middlewares...
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
+]
+
+এটার মানে এখন সব view default ভাবে login ছাড়া access করা যাবে না
+
+
+# login_not_required decorator
+যখন LoginRequiredMiddleware Active থাকে তখন সকল view default ভাবে login-required হয়ে যায়। কিন্তু কিছু view যেমন:
+- login page
+- registration page
+- public home page
+ইত্যাদি login ছাড়াই accessible হওয়া দরকার। এই ক্ষেত্রে Django দিয়েছে @login_not_required।
+
+@login_not_required একটি view-কে login ছাড়া run করতে দেয়, কিন্তু শুধুমাত্র তখনই কার্যকর যখন LoginRequiredMiddleware Active।
+
+# Example
+from django.contrib.auth.decorators import login_not_required
+
+@login_not_required
+def login_view(request):
+    ...
+
+এখন login_view login ছাড়া run করবে, যদিও middleware সব view-কে login-required করে রেখেছে।

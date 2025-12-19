@@ -1,0 +1,70 @@
+Q : Authentication Backends কী?
+-> Authentication Backends হলো Django-এর একটি core security mechanism, যা নির্ধারণ করে—
+- ইউজারকে কীভাবে authenticate করা হবে
+- ইউজারের permissions কোথা থেকে যাচাই করা হবে
+
+Authentication Backend হলো Django-এর “লজিক ইঞ্জিন”, যা ঠিক করে দেয় কোন নিয়ম অনুযায়ী কোনো ব্যবহারকারীকে valid হিসেবে গণ্য করা হবে
+
+-> ধরা যাক একটি Django অ্যাপে ইউজার লগইন করবে—
+- কেউ username + password দিয়ে
+- কেউ email + password দিয়ে
+- কেউ আবার Google / Facebook (OAuth) দিয়ে
+এই ভিন্ন ভিন্ন নিয়মগুলো Authentication Backend দিয়েই Django হ্যান্ডেল করে।
+
+-> Django ডিফল্টভাবে ModelBackend ব্যবহার করে Authentication Backend জন্য
+
+# in settings.py
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+-> Authentication Backend সাধারণত ৩টি Main কাজ করে:
+    1. authenticate() -> ইউজার valid কিনা যাচাই করে
+    2. get_user() -> ID দিয়ে user fetch করে
+    3. Permission methods -> ইউজারের অনুমতি যাচাই করে
+
+-> authenticate() function take default argument username and password. it returns a User object if the credentials
+are valid for a backend. If the credentials aren’t valid for any backend or if a backend raises PermissionDenied it
+returns None.
+
+
+-> authenticate() function মূলত তিনটি কাজ করে:
+1. Django এর settings.py:
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "someapp.backends.EmailBackend",
+]
+
+authenticate() → এই backend-গুলোর উপর লুপ চালায়:
+- প্রথম backend দিয়ে চেষ্টা করে user খুঁজতে
+- না পারলে দ্বিতীয় backend দিয়ে চেষ্টা করে
+- এভাবে চলতে থাকে
+
+2. যদি কোনো backend credential মিলিয়ে user খুঁজে পায় তাহলে সেই user object টা return করে
+
+3. authenticate() স্বয়ংক্রিয়ভাবে user.backend Attribute সেট করে দেয়, Example :
+user = authenticate(request, username=username, password=password)
+
+ধরা যাক authentication successful হয়েছে এবং "django.contrib.auth.backends.ModelBackend" backend authenticate করেছে.
+তাহলে Django user অবজেক্টের মধ্যে সেট করে:
+    user.backend = "django.contrib.auth.backends.ModelBackend"
+
+# Example
+>>> from django.contrib.auth import authenticate
+>>> user = authenticate(username="anik", password="1234asdf")
+>>> user
+<User: anik>
+
+
+# Optional Argument: request
+request হলো একটি HttpRequest অবজেক্ট, যেটি Django-র authentication backends-এর ভিতরে থাকা authenticate() মেথডে পাঠানো হতে পারে।
+
+>>> user = authenticate(request, username="Anik", password="1234asdf")
+
+-> কিছু advanced authentication system বানাতে গেলে নিচের তথ্য দরকার হয়:
+- IP Address অনুযায়ী login block
+- Device অনুযায়ী যাচাই
+- Session-ভিত্তিক authentication
+- API Token Authentication
+এই সব ক্ষেত্রে request ছাড়া কাজ করা সম্ভব নয় — তাই Django এটিকে optional parameter হিসেবে রেখেছে।
+

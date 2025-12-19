@@ -1,0 +1,78 @@
+Q : Proxy Model কী? (What is a proxy model?)
+-> Proxy Model যা Main/concrete মডেলের টেবিল ব্যবহার করে কিন্তু নিজের আলাদা behavior, method, ordering বা permissions রাখতে পারে।
+
+- নতুন কোনো ডাটাবেজ টেবিল তৈরি হয় না।
+- Main মডেলের ডেটাই ব্যবহার করে।
+- কিন্তু Python-level আচরণ আলাদা হয়।
+
+in short: একই টেবিল → দুইটি আলাদা মডেল আচরণ।
+
+class Person(models.Model):
+    class Meta:
+        permissions = [
+            ("can_eat_pizzas", "Can eat pizzas")
+        ]
+
+
+class Student(Person):
+    class Meta:
+        proxy = True
+        permissions = [
+            ("can_deliver_pizzas", "Can deliver pizzas")
+        ]
+
+- Person → সাধারণ concrete model (নিজস্ব টেবিল আছে)
+- Student → proxy model (নতুন টেবিল নেই)
+
+Proxy model নিজের permissions যুক্ত করতে পারে:
+- can_deliver_pizzas
+- কিন্তু concrete model-এর permissions এটা পায় না : can_eat_pizzas → Student model-এর মাধ্যমে পাওয়া যায় না
+
+
+Q : How proxy model works?
+-> Proxy model Main মডেলের:
+    - fields
+    - database table
+একদম অপরিবর্তিত রাখে। কিন্তু:
+    - New Meta options
+    - New permissions
+    - New methods
+    - New ordering
+নিজস্বভাবে সেট করা যায়। এবং ContentType আলাদা হয়। কারণ Django এটিকে একটি “স্বতন্ত্র মডেল” হিসাবে ধরে, যদিও টেবিল একই।
+
+# Reference d_auth project, auth_check apps models.py
+
+>>> from django.contrib.contenttypes.models import ContentType
+>>> from django.contrib.auth.models import Permission, User
+>>> from auth_check.models import Person, Student
+
+>>> content_type = ContentType.objects.get_for_model(Student)
+>>> content_type
+<ContentType: Auth_Check | person>
+>>> content_type = ContentType.objects.get_for_model(Student, for_concrete_model=False)
+>>> content_type
+<ContentType: Auth_Check | student>
+
+>>> student_permissions = Permission.objects.filter(content_type=content_type)
+>>> student_permissions
+<QuerySet [<Permission: Auth_Check | student | Can add student>, <Permission: Auth_Check | student | Can deliver pizzas>, <Permission: Auth_Check | student | Can change student>, <Permission: Auth_Check | student | Can delete student>, <Permission: Auth_Check | student | Can view student>]>
+>>> [p.codename for p in student_permissions]
+['add_student', 'can_deliver_pizzas', 'change_student', 'delete_student', 'view_student']
+
+>>> user = User.objects.get(pk=1)
+>>> user
+<User: anik>
+
+>>> for permission in student_permissions:
+...   user.user_permissions.add(permission)
+
+>>> user.has_perm('auth_check.view_student')
+True
+>>> user.has_perm('auth_check.can_deliver_pizzas')
+True
+
+>>> user.has_perm('auth_check.can_eat_pizzas')
+False
+>>> user.has_perms(['auth_check.add_person', 'auth_check.can_eat_pizzas'])
+False
+

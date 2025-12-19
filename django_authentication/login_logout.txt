@@ -1,0 +1,144 @@
+প্রতিটি incoming request-এ Django, session ও middleware ব্যবহার করে request-এ user কে যুক্ত করে।
+    - request.user
+    - request.auser() (async view-এর জন্য)
+এগুলো সবসময় “Present User” কে নির্দেশ করে।
+
+যদি user login না করা থাকে তাহলে request.user হবে AnonymousUser ক্লাসের instance। আর যদি user login করা থাকে তাহলে সেটা হবে User
+মডেলের instance। Example:
+if request.user.is_authenticated:
+    # for login user
+else:
+    # for anonymous user
+
+# Asynchronous view
+user = await request.auser()
+if user.is_authenticated:
+    # for login user
+else:
+    # for anonymous user
+
+
+-> login()
+-> alogin() — login() এর async ভার্সন
+কোন user-এর authentication successful হওয়ার পর, user-কে present session-এ যুক্ত করতে ব্যবহার করা হয় login() function।
+login() function current session-এ user id save করে Django’s session framework ব্যবহার করে।
+
+# login(request, user)
+- input হিসাবে request and user নেয় এবং এই ইউজারের ID session-এ save করে।
+- Django-এর session framework এর ওপর নির্ভর করে।
+- Anonymous session-এ আগে যেসব ডেটা ছিল, login করার পরও session-এ থেকে যায়।
+
+-> login(request, user) মূলত session আপডেট করে। login() session-এ দুইটি key save করে:
+1. session["_auth_user_id"]
+এখানে Django ইউজারের primary key (সাধারণত integer id) রাখে।
+
+2. session["_auth_user_backend"]
+এখানে Django authentication bakcend-এর value সেট করে। Example:
+_auth_user_backend = 'django.contrib.auth.backends.ModelBackend'
+
+
+#  authenticate() + login()
+from django.contrib.auth import authenticate, login
+
+def my_view(request):
+    username = request.POST["username"]
+    password = request.POST["password"]
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        # Redirect to a success page.
+    else:
+        # Return an 'invalid login' error message.
+
+
+-> একজন user যখন login করে:
+- Django current session-এ user ID এবং authentication backend save করে। যাতে ভবিষ্যতে প্রতিটি request-এ Django জানে কোন backend
+দিয়ে এই user authenticate হয়েছিল। Session-এ কোন authentication backend save করা হবে, তা নিম্নোক্ত নিয়ম অনুসারে নির্বাচন করা হয়:
+1. login() এ backend argument দিলে সেটা ব্যবহার হবে।
+
+2. যদি user.backend Attribute টি থাকে, তাহলে সেই value টি ব্যবহার করা হয়। এটি authenticate() এবং login() কে একসাথে সঠিকভাবে কাজ
+করতে সাহায্য করে, কারণ authenticate() যে User object টি return করে, সেই user object-এ user.backend attribute টি set করে দেয়।
+
+3. AUTHENTICATION_BACKENDS লিস্টে যদি মাত্র ১টি backend থাকে সেটাই ব্যবহার হবে।
+
+4. নাহলে Exception raise হবে, কারণ Django বুঝতে পারবে না কোন backend ব্যবহার করতে হবে।
+
+backend value টি অবশ্যই dotted import path string হতে হবে Example :
+    'django.contrib.auth.backends.ModelBackend'
+backend ক্লাস অবজেক্ট দেওয়া যাবে না।
+
+
+# login() function-এ input হিসাবে pass করা user-এ যদি user.backend না থাকে then :
+Case-1 :
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+এখানে মাত্র একটি backend আছে। তাই Django automatically এটাকেই ব্যবহার করবে। login()-এ কিছু না বললেও সমস্যা নেই।
+
+# Example
+from django.contrib.auth import authenticate, login
+
+def my_view(request):
+    user = authenticate(
+        request,
+        username="anik",
+        password="1234"
+    )
+    if user:
+        login(request, user)  # backend specify করতে হয়নি!
+        return HttpResponse("Login success")
+
+
+Case-2:
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "myapp.backends.EmailBackend",
+]
+
+AUTHENTICATION_BACKENDS লিস্টে দুটি backend আছে।
+- login(request, user) ব্যবহার করলে Django backend নির্বাচন করতে পারবে না, তখন Exception উঠবে:
+ValueError: You have multiple authentication backends configured and
+must specify the backend argument or set the backend attribute on the user.
+
+- তাই যখন একাধিক authentication backend থাকে, login() এ backend argument দিতে হবে।
+from django.contrib.auth import authenticate, login
+
+def my_view(request):
+    user = authenticate(
+        request,
+        email="test@example.com",
+        password="1234"
+    )
+    if user:
+        login(request, user, backend="myapp.backends.EmailBackend")
+        return HttpResponse("Login success")
+
+
+
+-> logout(request)
+-> alogout(request)
+
+# alogout() হলো logout() এর asynchronous version।
+
+যে user-কে django.contrib.auth.login() ব্যবহার করে login করানো হয়েছে, তাকে logout করানোর জন্য view-এর ভেতরে
+django.contrib.auth.logout() function ব্যবহার করা হয়। এই function :
+    - একটি HttpRequest object গinput হিসাবে নেয়
+    - কোনো value রিটার্ন করে না
+
+# Example :
+from django.contrib.auth import logout
+
+def logout_view(request):
+    logout(request)
+    # Redirect to a success page.
+
+logout() ব্যবহারের সময় user login করা থাক বা না থাক — কোনো error raise হয় না। logout() call করা হলে present request-এর
+session ডেটা সম্পূর্ণভাবে clean করে ফেলে। এটি নিরাপত্তার জন্য দরকার কারণ, একই ব্রাউজার পরবর্তী কোনো ব্যক্তি ব্যবহার করলে আগের ইউজারের session
+data যেন তার কাছে পৌঁছে না যায়।
+
+যদি logout-এর পর session-এ specific data রাখতে হয় চাই, তাহলে আগে logout() call করতে হবে তারপর session-এ ডেটা add করতে হবে।
+Example :
+logout(request)
+request.session["info"] = "Logged out successfully"
+

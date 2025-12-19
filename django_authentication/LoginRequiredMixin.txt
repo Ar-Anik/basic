@@ -1,0 +1,35 @@
+LoginRequiredMixin হল Class-Based View (CBV)-এ ব্যবহৃত একটি mixin, যা ঠিক একই কাজ করে যা login_required decorator
+Function-Based View (FBV)-এ করে।
+
+Class-Based View-এ যদি চাই, view-এ প্রবেশ করতে অবশ্যই user-কে logged-in থাকতে হবে, তাহলে view class-এর inheritance list-এর
+সবচেয়ে বাম পাশে LoginRequiredMixin দিতে হবে।
+
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views import View
+
+class MyView(LoginRequiredMixin, View):
+    login_url = "/login/"
+    redirect_field_name = "redirect_to"
+
+
+-> যদি কোনো user authenticate না থাকে, তাহলে এই LoginRequiredMixin দুটি কাজের যেকোনো একটি কাজ করবে:
+- Login page-এ redirect করবে
+- অথবা HTTP 403 Forbidden error দেখাবে (যদি raise_exception = True সেট করা থাকে)
+
+-> LoginRequiredMixin এসেছে AccessMixin থেকে। AccessMixin-এর নিচের attribute গুলো override করা যায়:
+1. login_url
+User authenticated না হলে কোন URL-এ redirect হবে
+
+2. redirect_field_name
+Redirect করার সময় next parameter হিসেবে কোন GET parameter ব্যবহার হবে (default = "next")
+
+3. raise_exception
+যদি user লগ-ইন না করে এবং raise_exception = True হয় তবে 403 Forbidden error দেখাবে
+
+4. permission_denied_message
+Permission fail হলে যে error message দেখাবে
+
+
+Note : LoginRequiredMixin এবং login_required decorator কখনোই user.is_active চেক করে না। তবে default
+AUTHENTICATION_BACKENDS inactive user-কে authenticate করতেই দেয় না।
+

@@ -1,0 +1,41 @@
+reference d_auth project, auth_check app
+
+-> Django যখন django.contrib.auth কে INSTALLED_APPS এ যুক্ত করে, তখন এটি প্রতিটি মডেলের জন্য চারটি ডিফল্ট পারমিশন তৈরি করে:
+    1. add – নতুন object Add করার permission
+    2. change – object change করার permission
+    3. delete – object delete করার permission
+    4. view – object view করার permission
+
+এগুলো manage.py migrate চালানোর সময় তৈরি হয়। প্রথমবার migrate চালালে, previous সব মডেলের জন্য default permission তৈরি হবে।
+পরবর্তীতে নতুন Model Add করলে, আবার migrate চালালে সেই নতুন মডেলের জন্য default permission তৈরি হবে।
+
+Django এ পারমিশনগুলো auth_permission নামের একটি টেবিলে সংরক্ষিত থাকে। অর্থাৎ তারা কোনো ইউজার বা গ্রুপের সাথে এখনও সংযুক্ত নয়।
+ধরা যাক, Model Bar। migrate করার পর auth_permission টেবিলে কিছু এন্ট্রি তৈরি হয়:
+
+------------------------------------------------------
+| id | name           | content_type_id | codename   |
+| -- | -------------- | --------------- | ---------- |
+| 1  | Can add bar    | 5               | add_bar    |
+| 2  | Can change bar | 5               | change_bar |
+| 3  | Can delete bar | 5               | delete_bar |
+| 4  | Can view bar   | 5               | view_bar   |
+------------------------------------------------------
+
+- content_type_id নির্দেশ করে কোন মডেলের জন্য পারমিশন।
+- এই চারটি পারমিশন এখন টেবিলে আছে, কিন্তু কোনো user বা গ্রুপের কাছে স্বয়ংক্রিয়ভাবে দেওয়া হয়নি।
+
+Note: এই পারমিশনগুলো Permission মডেলের মাধ্যমে manage করা যায়, কিন্তু সাধারণত direct access করা হয় না। সাধারণত আমরা
+user.has_perm() function ব্যবহার করি user-এর permission check করার জন্য।
+
+>>> from django.contrib.auth.models import User
+>>> user = User.objects.get(username='Anik')
+>>> user
+<User: anik>
+>>> user.has_perm('auth_check.add_bar')
+False
+>>> user.has_perm('auth_check.change_bar')
+False
+>>> user.has_perm('auth_check.delete_bar')
+False
+>>> user.has_perm('auth_check.view_bar')
+False

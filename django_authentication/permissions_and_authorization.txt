@@ -1,0 +1,35 @@
+Django-তে একটি বিল্ট-ইন পারমিশন সিস্টেম আছে। এই সিস্টেমের মাধ্যমে নির্দিষ্ট ইউজার বা গ্রুপকে বিভিন্ন ধরনের permission দেওয়া যায়। Django
+Admin এই permission গুলো ব্যবহার করে, তবে চাইলে নিজের কোডেও permission গুলো ব্যবহার করা যায়।
+
+# The Django admin site uses permissions as follows
+1. কোনো অবজেক্ট view করতে হলে ইউজারের সেই মডেলের জন্য “view” বা “change” Permission থাকতে হবে।
+2. কোনো অবজেক্ট add করতে হলে ইউজারের সেই মডেলের জন্য “add” Permission থাকতে হবে।
+3. Change List Page-এ ঢুকতে, change form দেখতে বা object update করতে হলে ইউজারের “change” Permission থাকতে হবে।
+4. কোনো অবজেক্ট Delete করতে হলে ইউজারের “delete” পারমিশন থাকতে হবে।
+
+-> একটি মডেলের সব অবজেক্টের জন্য এক রকম পারমিশন দেওয়া যায়, আবার প্রয়োজনে নির্দিষ্ট একটি অবজেক্টের জন্য আলাদা পারমিশন সেট করা যায়।
+Django-এর ModelAdmin ক্লাসে নিচের মেথডগুলো ব্যবহার করে আলাদা-আলাদা অবজেক্টের জন্য কাস্টম Permission নির্ধারণ করা যায়:
+    - has_view_permission()
+    - has_add_permission()
+    - has_change_permission()
+    - has_delete_permission()
+
+এর মাধ্যমে একই মডেলের দুইটি আলাদা অবজেক্টের Permission ও আলাদা হতে পারে।
+
+-> User মডেলের মধ্যে দুটি Many-to-Many সম্পর্ক থাকে:
+    1. groups
+    2. user_permissions
+অর্থাৎ একজন ইউজার একাধিক গ্রুপে থাকতে পারে এবং প্রতিটি গ্রুপের নিজস্ব Permission থাকতে পারে। একইভাবে ইউজারকে সরাসরি নির্দিষ্ট Permission ও
+দেওয়া যায়। একজন ইউজারের সাথে Group বা Permission Add/Remove করতে ঠিক সাধারণ Many-to-Many ফিল্ডের মতো কাজ করা হয়:
+
+1. User Group
+myuser.groups.set([group_list])
+myuser.groups.add(group, group, ...)
+myuser.groups.remove(group, group, ...)
+myuser.groups.clear()
+
+2. User Permissions
+myuser.user_permissions.set([permission_list])
+myuser.user_permissions.add(permission, permission, ...)
+myuser.user_permissions.remove(permission, permission, ...)
+myuser.user_permissions.clear()

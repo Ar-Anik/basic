@@ -1,0 +1,11 @@
+ModelBackend ইউজারের permission first time চেক করার পরে cache করে রাখে। Means :
+- একবার user.has_perm() চালালে Django ইউজারের সব permission মেমরিতে রাখে।
+- পরে যদি নতুন permission add করা হয় (same user instance এ) সেটি cached permissions-এ আপডেট হয় না।
+- তাই নতুন permission add করার পর সাথে সাথে has_perm() চালালে False দেখায়।
+
+এই সমস্যা সাধারণত view, test বা shell এ হয়।
+
+solution:
+- নতুন permission add করার পর user কে আবার database থেকে fetch করতে হবে।
+- কারণ refresh_from_db() cache clear করে না, তাই নতুন user instance আনতে হবে।
+

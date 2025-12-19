@@ -1,0 +1,54 @@
+-> Case-1: Default Behaviour - symmetrical=True
+এমন একটা মডেল create করা হলো যেখানে একটা মডেল নিজেই নিজের সাথে many-to-many relation-এ আছে
+
+# Example — Friendship system:
+class Person(models.Model)
+    name = models.CharField(max_length=100)
+    friends = models.ManyToManyField("self")
+
+এখানে Django ডিফল্টভাবে ধরে নেয় symmetrical=True, মানে — relation দুই দিকেই সমানভাবে প্রযোজ্য।
+
+>>> alice = Person.objects.create(name="Alice")
+>>> bob = Person.objects.create(name="Bob")
+
+>>> alice.friends.add(bob)
+>>> bob.friends.all()   --> Django Alice-কেও দেখাবে।
+
+কারণ, যখন symmetrical=True (default), Django ধরে নেয় “যদি Alice Bob-এর বন্ধু হয়, তাহলে Bob-ও Alice-এর বন্ধু।”
+
+
+-> Case-2: symmetrical=False (Directional Relationship)
+এখন একটা "Following" system বানাতে চাই, যেখানে A যদি B কে follow করে, B আবার A কে follow না-ও করতে পারে (যেমন Twitter, Instagram ইত্যাদি)।
+এক্ষেত্রে তোমার one-way relationship দরকার। তখন specific ভাবে ব্যবহার করতে হবে symmetrical=False
+
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+    following = models.ManyToManyField("self", symmetrical=False)
+
+>>> alice = Person.objects.create(name="Alice")
+>>> bob = Person.objects.create(name="Bob")
+
+>>> alice.following.add(bob)
+>>> alice.following.all()  -> result: [Bob]
+
+>>> bob.following.all()  -> result: []
+
+Now, Alice → Bob কে follow করছে কিন্তু Bob → Alice কে follow করছে না
+
+
+-> Case-3:  through + symmetrical=False
+যদি relationship-এ extra field (যেমন “follow date”) রাখতে চাই, তাহলে through মডেল দিতে হবে:
+
+class Person(models.Model):
+    name = models.CharField(max_length=100)
+    following = models.ManyToManyField("self", symmetrical=False, through="Follow")
+
+class Follow(models.Model):
+    follower = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="following_set")
+    following = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="followers_set")
+    date_followed = models.DateField()
+
+>>> Follow.objects.create(follower=alice, following=bob, date_followed="2025-10-05")
+
+>>> alice.following_set.all()  # whom Alice follows
+>>> bob.followers_set.all()    # who follows Bob

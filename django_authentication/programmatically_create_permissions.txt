@@ -1,0 +1,30 @@
+Django তে permission সাধারণত মডেলের Meta ক্লাসে define করা হয়, তবে permission directly code দিয়ে তৈরি করাও সম্ভব।
+
+Example: একটি Model আছে BlogPost নামে এবং auth_check অ্যাপে। এখানে আমরা can_publish নামে একটি পারমিশন তৈরি করতে চাই।
+
+>>> from django.contrib.auth.models import User, Permission
+>>> from django.contrib.contenttypes.models import ContentType
+>>> from auth_check.models import BlogPost
+
+>>> user = User.objects.get(username='anik')
+>>> content_type = ContentType.objects.get_for_model(BlogPost)
+
+>>> permission = Permission.objects.create(codename='can_publish', name="Can Publish Posts", content_type=content_type)
+>>> permission
+<Permission: Auth_Check | blog post | Can Publish Posts>
+
+এখানে তৈরি হওয়া permission টি পরে কোনো ইউজারে অ্যাসাইন করা যাবে:
+>>> user.user_permissions.add(permission)
+>>> user.has_perm('auth_check.can_publish')
+True
+
+Q : ContentType কী?
+-> ContentType হলো Django এর একটি Model (django.contrib.contenttypes.models.ContentType) যা প্রতিটি Model কে unique id
+দেয় ডাটাবেসে। এটি ব্যবহার করে Django জানতে পারে কোন permission কোন মডেলের জন্য তৈরি হয়েছে।
+
+প্রতিটি permission অবশ্যই একটি content_type এর সাথে যুক্ত থাকে। Example:
+
+    content_type = ContentType.objects.get_for_model(BlogPost)
+
+- এটি BlogPost মডেলের ContentType খুঁজে বের করে।
+- পারমিশন তৈরি করার সময় আমরা এটিকে যুক্ত করি, যাতে Django জানে এই পারমিশন BlogPost মডেলের সাথে সম্পর্কিত।
