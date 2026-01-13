@@ -1,0 +1,269 @@
+-> view-এর মধ্যেই সরাসরি request.user-এর উপর test চালানো সম্ভব। উদাহরণস্বরূপ নিচের view টি পরীক্ষা করে দেখে যে ব্যবহারকারীর
+ইমেলটি কাঙ্ক্ষিত ডোমেনের কিনা এবং যদি না হয়, তাহলে লগইন page-এ redirect করে:
+
+from django.shortcuts import redirect
+def my_view(request):
+    # ব্যবহারকারীর ইমেলটি "@example.com" দিয়ে শেষ হয়েছে কিনা test করা হচ্ছে
+    if not request.user.email.endswith("@example.com"):
+        # যদি না হয়, তবে '/login/' এ redirect করা হচ্ছে
+        # 'next' প্যারামিটারের মাধ্যমে current path তথ্য পাঠানো হচ্ছে
+        return redirect("/login/?next=%s" % request.path)
+
+    # ... যদি পরীক্ষা সফল হয়, তবে ভিউ-এর বাকি কোড কার্যকর হবে
+
+এখানে যদি test unsuccessful হয় user-কে /login/ URL-এ redirect করা হবে এবং ?next=%s অংশটি current path-এর মান
+সহ একটি query parameter add করে, যাতে successful login-এর পরে user কে এই page-এ ফিরিয়ে আনা যায়।
+
+-> user_passes_test(test_func, login_url=None, redirect_field_name='next') (Function-Based View)
+user_passes_test হলো Django-র একটি decorator যেটি কোনো view execute হওয়ার আগে current user-এর ওপর একটি test
+চালায়। এই decorator-এর মধ্যে একটি function পাঠানো হয় এবং সেই function-এ Django স্বয়ংক্রিয়ভাবে বর্তমান User object পাঠায়।
+
+যখন view-তে request আসে, Django প্রথমে decorator-এর ভেতরে থাকা test function কল করে। যদি ওই function True রিটার্ন
+করে, তাহলে view স্বাভাবিকভাবে execute হয়। আর যদি False রিটার্ন করে, তাহলে view execute না হয়ে user-কে অন্য একটি URL-এ
+redirect করা হয় অথবা নির্দিষ্ট সেটিং থাকলে permission error দেখানো হয়।
+
+অর্থাৎ ভিউতে ঢোকার আগে ইউজার একটি অতিরিক্ত authorization check pass করতে বাধ্য হয়। এই test টি পুরোপুরি custom logic-এর
+ওপর নির্ভর করে এবং permission system ব্যবহার না করেও যেকোনো শর্ত প্রয়োগ করা যায়।
+
+from django.contrib.auth.decorators import user_passes_test
+
+def email_check(user):
+    return user.email.endswith("@example.com")
+
+@user_passes_test(email_check)
+def my_view(request):
+    ...
+
+এই example--এ email_check function-টি current user-এর email check করে। যদি email @example.com দিয়ে শেষ হয় তাহলে
+True রিটার্ন হয় এবং view execute হয়। অন্যথায় Django view execute না করে user কে login page-এ redirect করে।
+
+user_passes_test নিজে থেকে কখনোই check করে না যে user login করা আছে কি না। যদি user login না করা থাকে তাহলে user
+হবে AnonymousUser। এই অবস্থায় test function ভেঙে যেতে পারে বা ভুল ফলাফল দিতে পারে। এই কারণে বাস্তবে প্রায় সব সময়
+login_required এর সাথে একসাথে ব্যবহার করা উচিত।
+
+from django.contrib.auth.decorators import login_required, user_passes_test
+
+@login_required
+@user_passes_test(email_check)
+def my_view(request):
+    ...
+
+এভাবে ব্যবহার করলে আগে নিশ্চিত হয় যে user authenticated তারপর custom test চালানো হয়।
+
+-> user_passes_test তিনটি parameter নেয়।
+- প্রথমটি হলো test function, যেটি অবশ্যই দিতে হয়।
+
+- দ্বিতীয়টি login_url। test fail করলে কোন URL-এ redirect হবে সেটি এখানে নির্ধারণ করা যায়। যদি কিছু না দেওয়া হয় তাহলে
+settings.LOGIN_URL ব্যবহার করা হয়।
+
+@user_passes_test(email_check, login_url="/login/")
+def my_view(request):
+    ...
+
+- তৃতীয়টি redirect_field_name, এটি next parameter-এর নাম নিয়ন্ত্রণ করে। যদি এটি None সেট করা হয় তাহলে URL-এ ?next=...
+যুক্ত হয় না। এটি তখন দরকার হয় যখন redirect করা হচ্ছে এমন কোনো পেজে যেখানে পরবর্তীতে ফিরে আসার দরকার নেই।
+
+
+-> Class-Based View এর জন্য UserPassesTestMixin
+Function-based view না ব্যবহার করে যদি class-based view ব্যবহার করা হয়, তাহলে decorator-এর পরিবর্তে mixin ব্যবহার করতে হয়।
+
+from django.contrib.auth.mixins import UserPassesTestMixin
+from django.views import View
+
+class MyView(UserPassesTestMixin, View):
+    def test_func(self):
+        return self.request.user.email.endswith("@example.com")
+
+এখানে test_func() override করা বাধ্যতামূলক। এই method True বা False রিটার্ন করে এবং সেই অনুযায়ী access দেওয়া হয়।
+এই mixin AccessMixin থেকে এসেছে, তাই login_url, raise_exception, redirect_field_name ইত্যাদি behaviour কাস্টমাইজ করা যায়।
+
+Q : test_func() কখন call হয়?
+-> test_func() view-এর HTTP method like : get(), post() ইত্যাদি execute হওয়ার ঠিক আগেই call হয়।
+অর্থাৎ কোনো request আসলে Django সরাসরি get() বা post() এ ঢোকে না। তার আগে UserPassesTestMixin একটি test step চালায়
+এবং সেই step-এর অংশ হিসেবেই test_func() call হয়।
+
+
+-> কোনো request এলে Django নিচের ধাপগুলো অনুসরণ করে:
+1. URL resolve
+Django URL থেকে বুঝে নেয় কোন class-based view কল করতে হবে।
+
+2. View instance তৈরি হয়
+Django view-এর একটি instance তৈরি করে এবং request object সেট করে।
+
+3. dispatch() method কল হয়
+Class-based view-এ সব request প্রথমে dispatch() method-এর মধ্য দিয়ে যায়।
+
+Django-র সব Class-Based View-এর একটি কেন্দ্রীয় method আছে, নাম dispatch()। এর কাজ —
+       request আসার পর কোন HTTP method (GET / POST / PUT) return করবে তার decission নেয়
+
+View ক্লাসের ভেতরের dispatch() like :
+class View:
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "GET":
+            return self.get(request, *args, **kwargs)
+        elif request.method == "POST":
+            return self.post(request, *args, **kwargs)
+
+UserPassesTestMixin নিজে সরাসরি dispatch() লিখে
+
+class UserPassesTestMixin(AccessMixin):
+    def test_func(self):
+        raise NotImplementedError(
+            "{} is missing the implementation of the test_func() method.".format(
+                self.__class__.__name__
+            )
+        )
+
+    def get_test_func(self):
+        return self.test_func
+
+    def dispatch(self, request, *args, **kwargs):
+        user_test_result = self.get_test_func()()
+        if not user_test_result:
+            return self.handle_no_permission()
+        return super().dispatch(request, *args, **kwargs)
+
+Mixin-এ dispatch() ওভাররাইড করে super().dispatch() কল করার অর্থ হলো—রিকোয়েস্টটি মূল ভিউতে পৌঁছানোর আগেই একটি
+ইন্টারসেপ্টর বা ফিল্টার লেয়ার তৈরি করা
+
+UserPassesTestMixin dispatch function-এর ভিতরে get_test_func() method-টা call করে।  test_func() যদি True রিটার্ন
+করে Django View class এর dispatch function call করে next ধাপ গুলো execute করে। test_func() যদি False রিটার্ন করে
+Django সঙ্গে সঙ্গে access deny raise করে।
+
+-> get_test_func() override করা
+চাইলে test_func নাম ব্যবহার না করে অন্য নামের function দিয়েও test চালানো যায়।
+
+class MyView(UserPassesTestMixin, View):
+    def custom_check(self):
+        return self.request.user.is_staff
+
+    def get_test_func(self):
+        return self.custom_check
+
+-> নিচের কোডটি সব test_func() করবে না
+
+class TestMixin1(UserPassesTestMixin):
+    def test_func(self):
+        return self.request.user.email.endswith("@example.com")
+
+class TestMixin2(UserPassesTestMixin):
+    def test_func(self):
+        return self.request.user.username.startswith("django")
+
+class MyView(TestMixin1, TestMixin2, View): ...
+
+কারণ এখানে Django শুধুমাত্র একটি test_func() চালায়। তাই একাধিক শর্ত একত্রে প্রয়োগ করতে হলে একটি test_func() এর ভেতরেই
+সব condition লিখতে হয়।
+
+
+-> permission_required decorator
+ইউজারের কোনো নির্দিষ্ট permission আছে কি না, এটি একটি খুব সাধারণ প্রয়োজন। এই কাজের জন্য Django আলাদা করে
+permission_required decorator দিয়েছে। Just like the has_perm() method:
+
+from django.contrib.auth.decorators import permission_required
+
+@permission_required("polls.add_choice")
+def my_view(request):
+    ...
+
+Permission-এর নাম সবসময় এই format-এ হয়: <app_label>.<permission_codename>
+
+একাধিক permission দরকার হলে iterable ব্যবহার করা যায়। সব permission না থাকলে access বন্ধ হয়ে যাবে।
+
+# optional login_url parameter
+login_url-এর default মান হিসেবে settings.LOGIN_URL ব্যবহৃত হয়। যদি আলাদাভাবে কোনো login_url set না করা হয়
+তবে জ্যাঙ্গো (Django) প্রোজেক্টের main সেটিংস ফাইল (settings.py) থেকে LOGIN_URL এর মানটি স্বয়ংক্রিয়ভাবে নিয়ে নেবে।
+
+@permission_required("polls.add_choice", login_url="/loginpage/")
+def my_view(request):
+    ...
+
+# optional raise_exception=True/False
+যদি raise_exception প্যারামিটারটি set করা হয়, তবে ডেকোরেটরটি PermissionDenied exception raise করবে। এর ফলে
+user কে login পেজে redirect করার পরিবর্তে সরাসরি 403 (HTTP Forbidden) view টি দেখানো হবে।
+
+যদি raise_exception ব্যবহার করার পাশাপাশি ইউজারদের প্রথমে লগইন করার সুযোগ দিতে হয়, তবে login_required() ডেকোরেটরটি
+যুক্ত করা যেতে পারে
+
+from django.contrib.auth.decorators import login_required, permission_required
+
+@login_required
+@permission_required("polls.add_choice", raise_exception=True)
+def my_view(request):
+      ...
+
+-> Infinite Redirect Loop Problem Solved by raise_exception=True :
+যখন LoginView-তে redirect_authenticated_user=True সেট করা থাকে, তখন এর কাজ হলো কোনো user যদি ইতিমধ্যে login করা
+অবস্থায় থাকে এবং ভুলে বা লিংকে ক্লিক করে আবার /login/ পেজে চলে আসে, তবে তাকে login page না দেখিয়ে সরাসরি home page বা
+ড্যাশবোর্ডে পাঠিয়ে দেওয়া বা Redirect করা।
+
+ধরা যাক একজন user login করা আছে, কিন্তু তার একটি নির্দিষ্ট page (যেমন: admin_dashboard) দেখার permission নেই।
+- user admin_dashboard-এ যাওয়ার চেষ্টা করে। permission না থাকায় Django তাকে /login/ পেজে পাঠিয়ে দেয়।
+- কিন্তু /login/ view দেখে যে user তো অলরেডি লগ-ইন করা আছে (এবং redirect_authenticated_user=True চালু আছে)।
+- তাই /login/ ভিউ তাকে আবার সেই admin_dashboard-এ ফেরত পাঠিয়ে দেয়।
+- admin_dashboard আবার তাকে /login/ পেজে পাঠায়।
+
+এভাবে browser ঘুরতেই থাকে (Loop)। এই সমস্যা এড়ানোর জন্য কোডে raise_exception=True ব্যবহার করতে হয়। এতে user-কে login
+পেজে না পাঠিয়ে সরাসরি "403 Forbidden" error দেখানো হয়।
+
+
+# Class-Based View এর জন্য PermissionRequiredMixin
+Class-based ভিউতে পারমিশন বা অনুমতি চেক করার জন্য PermissionRequiredMixin ব্যবহার করা হয়। এটি function-based ভিউয়ের
+@permission_required ডেকোরেটরের মতোই কাজ করে। PermissionRequiredMixin কে ক্লাসের সবার বামে রাখতে হবে।
+
+যখন কোনো user কোনো view বা পেজে প্রবেশ করতে চায়, তখন এই মিক্সিন চেক করে দেখে যে ইউজারের সেই view-তে প্রবেশ করার জন্য
+প্রয়োজনীয় permission আছে কি না।
+
+PermissionRequiredMixin use করার পর কোনো ভিউতে প্রবেশ করার জন্য কোন কোন permission প্রয়োজন, তা permission_required
+প্যারামিটারের মাধ্যমে সেট করতে হয়। এটি একটি single string হতে পারে অথবা অনেকগুলো পারমিশনের একটি list (Iterable) হতে পারে।
+
+from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.views import View
+
+class MyView(PermissionRequiredMixin, View):
+    permission_required = "polls.add_choice"
+
+একাধিক permission প্রয়োজন হলে list ব্যবহার করা যায়:
+
+class MyView(PermissionRequiredMixin, View):
+    permission_required = [
+        "polls.view_choice",
+        "polls.change_choice",
+    ]
+
+ইউজারের যদি পারমিশন না থাকে তবে তাকে কীভাবে হ্যান্ডেল করা হবে তা AccessMixin থেকে আসা প্যারামিটারগুলো দিয়ে কাস্টমাইজ করা যায়।
+এছাড়া বিশেষ প্রয়োজনে এর মেথডগুলো ওভাররাইড করা সম্ভব।
+
+- get_permission_required()
+এই মেথডটি ভিউতে প্রয়োজনীয় permission গুলোর একটি list বা tuple return করে। default ভাবে এটি সেট করা
+permission_required ভ্যারিয়েবলটিকেই ব্যবহার করে। তবে পারমিশন যদি ডাইনামিক বা পরিবর্তনশীল হয়, তবে এটি ওভাররাইড করতে হয়।
+
+def get_permission_required(self):
+        """
+        Override this method to override the permission_required attribute.
+        Must return an iterable.
+        """
+        if self.permission_required is None:
+            raise ImproperlyConfigured(
+                f"{self.__class__.__name__} is missing the "
+                f"permission_required attribute. Define "
+                f"{self.__class__.__name__}.permission_required, or override "
+                f"{self.__class__.__name__}.get_permission_required()."
+            )
+        if isinstance(self.permission_required, str):
+            perms = (self.permission_required,)
+        else:
+            perms = self.permission_required
+        return perms
+
+- has_permission()
+এটি একটি বুলিয়ান মান (True অথবা False) রিটার্ন করে। ইউজার এই ভিউটি দেখার যোগ্য কি না, তা এই মেথডই শেষ পর্যন্ত নির্ধারণ করে।
+ডিফল্টভাবে এটি চেক করে যে ইউজারের কাছে get_permission_required() থেকে আসা সব পারমিশন আছে কি না।
+
+def has_permission(self):
+    """
+    Override this method to customize the way permissions are checked.
+    """
+    perms = self.get_permission_required()
+    return self.request.user.has_perms(perms)
+
